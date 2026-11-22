@@ -66,6 +66,7 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 				orchestratorPlugins(params.PluginManager)),
 			sseKeepAlive:             params.SSEKeepAliveConfig,
 			sseHeartbeatFormat:       sseHeartbeatAnthropic,
+			streamProtocol:           StreamProtocolAnthropic,
 			safeguardsConfig:         params.SafeguardsConfig,
 			safeguardsConfigProvider: params.SystemService.ClaudeCodeSafeguardsConfig,
 			inputUsageCache:          newInputUsageCache(),

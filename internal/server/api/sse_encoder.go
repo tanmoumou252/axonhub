@@ -29,7 +29,9 @@ func encodeStreamError(formatErr StreamErrorFormatter) StreamErrorEncoder {
 }
 
 func (h *ChatCompletionHandlers) writeSSEStream(c *gin.Context, stream streams.Stream[*httpclient.StreamEvent]) {
-	encodeErr := encodeStreamError(FormatStreamError)
+	encodeErr := encodeStreamError(func(ctx context.Context, err error) any {
+		return FormatStreamErrorFor(h.streamProtocol, ctx, err)
+	})
 	if h.streamAdapterFactory != nil {
 		var systemService *biz.SystemService
 		if h.ChatCompletionOrchestrator != nil {

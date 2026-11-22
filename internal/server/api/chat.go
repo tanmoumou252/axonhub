@@ -46,11 +46,23 @@ const (
 	sseHeartbeatAnthropic
 )
 
+// StreamProtocol selects the wire shape of in-band SSE terminal error events.
+// Each inbound SDK dispatches on a different discriminator field; emitting the
+// OpenAI shape on an Anthropic stream makes strict parsers reject the frame.
+type StreamProtocol uint8
+
+const (
+	StreamProtocolOpenAI StreamProtocol = iota
+	StreamProtocolAnthropic
+	StreamProtocolGemini
+)
+
 type ChatCompletionHandlers struct {
 	ChatCompletionOrchestrator *orchestrator.ChatCompletionOrchestrator
 	StreamWriter               StreamWriter
 	sseKeepAlive               SSEKeepAliveConfig
 	sseHeartbeatFormat         sseHeartbeatFormat
+	streamProtocol             StreamProtocol
 	streamAdapterFactory       streamAdapterFactory
 	safeguardsConfig           safeguards.Config
 	safeguardsConfigProvider   func(context.Context) (safeguards.Config, error)
@@ -854,6 +866,46 @@ func streamErrorStatus(err error) int {
 	}
 
 	return http.StatusInternalServerError
+}
+
+// FormatStreamErrorFor formats an in-band stream error for the given inbound
+// protocol. The Anthropic Messages stream dispatches on a top-level `type`
+// field; the OpenAI-compatible shape (no top-level type) is rejected by strict
+// Anthropic SDKs with an invalid_union error that drops the stream.
+func FormatStreamErrorFor(protocol StreamProtocol, ctx context.Context, err error) any {
+	switch protocol {
+	case StreamProtocolAnthropic:
+		base := FormatStreamError(ctx, err)
+		// FormatStreamError returns gin.H (a named map type), so a direct type
+		// assertion to map[string]any fails on the distinct dynamic type. Round-trip
+		// through JSON to normalize into a plain map before reshaping.
+		raw, marshalErr := json.Marshal(base)
+		if marshalErr != nil {
+			return base
+		}
+		var detail map[string]any
+		if unmarshalErr := json.Unmarshal(raw, &detail); unmarshalErr != nil {
+			return base
+		}
+		errObj, ok := detail["error"].(map[string]any)
+		if !ok {
+			return base
+		}
+		// Anthropic's stream union requires a top-level discriminator and keeps
+		// the request id under the error object rather than at the root.
+		result := map[string]any{
+			"type":  "error",
+			"error": errObj,
+		}
+		if rid, ok := detail["request_id"].(string); ok && rid != "" {
+			if _, exists := errObj["request_id"]; !exists {
+				errObj["request_id"] = rid
+			}
+		}
+		return result
+	default:
+		return FormatStreamError(ctx, err)
+	}
 }
 
 // FormatStreamError formats a stream error into an OpenAI-compatible JSON error object.
