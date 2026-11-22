@@ -942,6 +942,18 @@ func (p *PersistentOutboundTransformer) HasMoreChannels() bool {
 	return p.state.CurrentCandidateIndex+1 < len(p.state.ChannelModelsCandidates)
 }
 
+// HasMoreModels reports whether the current channel candidate still has an
+// untried sibling model. It implements pipeline.CandidateModelIterator so a
+// first-event timeout advances to the next (ChannelID, ActualModel) instead of
+// switching channels and dropping every remaining model of this channel.
+func (p *PersistentOutboundTransformer) HasMoreModels() bool {
+	if p.state == nil || p.state.CurrentCandidate == nil {
+		return false
+	}
+
+	return p.state.CurrentModelIndex+1 < len(p.state.CurrentCandidate.Models)
+}
+
 // resetPassThroughStreamState releases the abandoned attempt's raw provider stream
 // and clears its recorder so the next attempt starts with a clean slate.
 func (p *PersistentOutboundTransformer) resetPassThroughStreamState() {

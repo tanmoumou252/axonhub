@@ -109,6 +109,33 @@ func requestedModelFromContext(ctx context.Context) string {
 	return ""
 }
 
+// attemptActualModelContextKey carries the upstream model a candidate will
+// actually attempt, so a model-aware strategy scores the same (channel, model)
+// unit the breaker records on instead of only the client-visible alias.
+type attemptActualModelContextKey struct{}
+
+// candidateScoringContext derives the per-candidate scoring context. A candidate
+// without a resolved model leaves the context untouched, so every strategy
+// behaves exactly as it does today.
+func candidateScoringContext(ctx context.Context, candidate *ChannelModelsCandidate) context.Context {
+	modelID := candidate.FirstActualModel()
+	if modelID == "" {
+		return ctx
+	}
+
+	return context.WithValue(ctx, attemptActualModelContextKey{}, modelID)
+}
+
+// attemptActualModelFromContext extracts the candidate's attempted upstream
+// model, or "" when the load balancer did not derive one.
+func attemptActualModelFromContext(ctx context.Context) string {
+	if modelID, ok := ctx.Value(attemptActualModelContextKey{}).(string); ok {
+		return modelID
+	}
+
+	return ""
+}
+
 func contextWithRequestStream(ctx context.Context, stream bool) context.Context {
 	return context.WithValue(ctx, streamContextKey{}, stream)
 }
@@ -231,11 +258,12 @@ func (lb *LoadBalancer) sortProduction(
 	scored := make([]candidateScore, len(candidates))
 	for i, c := range candidates {
 		metrics, _ := lb.channelMetrics(ctx, c.Channel)
+		candidateCtx := candidateScoringContext(ctx, c)
 
 		totalScore := 0.0
 		// Apply all strategies
 		for _, strategy := range lb.strategies {
-			totalScore += strategy.Score(ctx, c.Channel, metrics)
+			totalScore += strategy.Score(candidateCtx, c.Channel, metrics)
 		}
 
 		scored[i] = candidateScore{
@@ -355,13 +383,15 @@ func (lb *LoadBalancer) sortWithDebug(
 			)
 		}
 
+		candidateCtx := candidateScoringContext(ctx, c)
+
 		totalScore := 0.0
 		strategyScores := make([]StrategyScore, 0, len(lb.strategies))
 
 		// Apply all strategies and collect detailed scores
 		for _, strategy := range lb.strategies {
 			scoreStart := time.Now()
-			score, strategyScore := strategy.ScoreWithDebug(ctx, c.Channel, metrics)
+			score, strategyScore := strategy.ScoreWithDebug(candidateCtx, c.Channel, metrics)
 			strategyScore.Duration = time.Since(scoreStart)
 			strategyScores = append(strategyScores, strategyScore)
 			totalScore += score

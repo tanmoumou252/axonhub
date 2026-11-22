@@ -1,3 +1,11 @@
+// 职责: 解析并聚合渠道模型候选，提供熔断身份取值与候选选择所需的元数据。
+// 关联文件:
+//   internal/server/orchestrator/load_balancer.go
+//   internal/server/orchestrator/model_circuit_breaker.go
+//   internal/server/biz/channel.go
+// 注意事项:
+//   FirstActualModel() 是 (channelID, actualModel) 熔断键的候选侧唯一取值表达式，
+//   与 aggregateChannelModelCandidates 的去重键同源；禁改回请求别名。
 package orchestrator
 
 import (
@@ -38,6 +46,18 @@ type ChannelModelsCandidate struct {
 	// Anthropic max_tokens fallback when the client omitted an output cap.
 	// Zero means the catalog model has no usable limit.
 	DefaultMaxTokens int64
+}
+
+// FirstActualModel returns the upstream model this candidate attempts first. It
+// is the model half of the cross-request circuit-breaker identity, matching the
+// (channelID, actualModel) pair aggregateChannelModelCandidates deduplicates on
+// and the pair the request-internal failover advances through.
+func (c *ChannelModelsCandidate) FirstActualModel() string {
+	if c == nil || len(c.Models) == 0 {
+		return ""
+	}
+
+	return c.Models[0].ActualModel
 }
 
 // ModelRoutingPolicy contains model-level overrides carried from model
@@ -772,7 +792,12 @@ func (s *LoadBalancedSelector) Select(ctx context.Context, req *llm.Request) ([]
 
 	requiredCount := 1
 	if retryPolicy.Enabled {
-		requiredCount = 1 + retryPolicy.MaxChannelRetries
+		// Budget in candidate attempts, not channel slots. A same-channel rule can
+		// carry several sibling models, and cross-rule failover must be able to
+		// reach each (channel, actualModel) without being truncated by the channel
+		// switching budget. Use MaxSingleChannelRetries so per-channel retries (e.g.
+		// the user-configured 20+) still allow every same-priority rule to surface.
+		requiredCount = 1 + retryPolicy.MaxChannelRetries + retryPolicy.MaxSingleChannelRetries
 	}
 
 	stickyID, stickyOK := 0, false

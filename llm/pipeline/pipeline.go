@@ -47,6 +47,24 @@ type ChannelSameChannelRetryLimit interface {
 	SameChannelRetryLimit() (limit int, ok bool)
 }
 
+// CandidateModelIterator is an optional interface a ChannelRetryable may also
+// implement to report whether the current channel candidate still has an untried
+// sibling model. A first-event timeout is a model-scoped failure: it must advance
+// to that sibling model rather than discarding the whole channel slot. When no
+// sibling remains, the timeout is channel-scoped and falls through to a channel
+// switch.
+type CandidateModelIterator interface {
+	HasMoreModels() bool
+}
+
+func hasMoreCandidateModels(outbound transformer.Outbound) bool {
+	if iter, ok := outbound.(CandidateModelIterator); ok {
+		return iter.HasMoreModels()
+	}
+
+	return false
+}
+
 // ChannelCustomizedExecutor interface for channel need custom the process of request.
 // The customized executor will be used to execute the request.
 // e.g. the aws bedrock process need a custom executor to handle the request.
@@ -345,8 +363,17 @@ func (p *pipeline) Process(ctx context.Context, request *httpclient.Request) (*R
 		canRetry := false
 		timeoutRetry := isResponseTimeoutError(lastErr)
 
+		// A first-event/non-stream timeout is a model-scoped failure as long as the
+		// current channel candidate still has untried sibling models. Those models
+		// are independent (separate compute pools behind an aggregator channel), so
+		// the timeout must advance to the next model instead of abandoning the whole
+		// channel slot. When no sibling remains, the timeout is channel-scoped and we
+		// keep the historical behaviour of switching channels immediately.
+		// Non-timeout errors always keep the original same-channel-first behaviour.
+		sameChannelAllowed := !timeoutRetry || hasMoreCandidateModels(p.Outbound)
+
 		// 1. Try same-channel retry first if supported
-		if !timeoutRetry {
+		if sameChannelAllowed {
 			if channelRetryable, ok := p.Outbound.(ChannelRetryable); ok {
 				if sameChannelRetries < p.maxSameChannelRetriesFor() && channelRetryable.CanRetry(lastErr) {
 					if err := channelRetryable.PrepareForRetry(ctx); err == nil {

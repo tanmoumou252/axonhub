@@ -1,3 +1,10 @@
+// 职责: 按候选实际尝试的 (channelID, actualModel) 键读取熔断状态并给出选路权重。
+// 关联文件:
+//   internal/server/orchestrator/load_balancer.go
+//   internal/server/orchestrator/model_circuit_breaker.go
+//   internal/server/biz/model_circuit_breaker.go
+// 注意事项:
+//   熔断键 = (channelID, actualModel)，与记录侧同源；禁改回请求别名。
 //nolint:gosec // Checked.
 package orchestrator
 
@@ -36,11 +43,22 @@ func (s *ModelAwareCircuitBreakerStrategy) Name() string {
 	return "ModelAwareCircuitBreaker"
 }
 
+// breakerModelID is the model half of the breaker identity for this candidate:
+// the resolved upstream model that will be attempted, falling back to the
+// client-requested alias when the candidate carries no resolved model.
+func breakerModelID(ctx context.Context) string {
+	if modelID := attemptActualModelFromContext(ctx); modelID != "" {
+		return modelID
+	}
+
+	return requestedModelFromContext(ctx)
+}
+
 // Score calculates the score based on model circuit breaker status.
 // This is the production path with minimal overhead.
 func (s *ModelAwareCircuitBreakerStrategy) Score(ctx context.Context, channel *biz.Channel, _ *biz.AggregatedMetrics) float64 {
-	// Get the requested model from context
-	modelID := requestedModelFromContext(ctx)
+	// Score the model this candidate actually attempts.
+	modelID := breakerModelID(ctx)
 	if modelID == "" {
 		// If no specific model is requested, return neutral score
 		return s.maxScore * 0.5
@@ -65,8 +83,8 @@ func (s *ModelAwareCircuitBreakerStrategy) Score(ctx context.Context, channel *b
 func (s *ModelAwareCircuitBreakerStrategy) ScoreWithDebug(ctx context.Context, channel *biz.Channel, _ *biz.AggregatedMetrics) (float64, StrategyScore) {
 	startTime := time.Now()
 
-	// Get the requested model from context
-	modelID := requestedModelFromContext(ctx)
+	// Score the model this candidate actually attempts.
+	modelID := breakerModelID(ctx)
 
 	details := map[string]any{
 		"channel_id": channel.ID,

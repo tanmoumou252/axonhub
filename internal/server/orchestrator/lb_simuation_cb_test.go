@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/looplj/axonhub/internal/ent"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 )
 
@@ -215,4 +217,32 @@ func TestModelAwareCircuitBreakerStrategy_EqualWeightDistribution(t *testing.T) 
 	for _, ch := range channels {
 		assert.Greater(t, counts[ch.ID], 200, "Channel %d should have roughly 1/3 of traffic", ch.ID)
 	}
+}
+
+// TestModelAwareCircuitBreakerStrategyScoresAttemptModel closes the loop: the
+// scorer must read the same (channel, actual model) key the tracker writes. A
+// tripped upstream model must not be masked by the client-visible alias.
+func TestModelAwareCircuitBreakerStrategyScoresAttemptModel(t *testing.T) {
+	ctx := context.Background()
+	cb := biz.NewModelCircuitBreaker()
+	policy := biz.DefaultModelCircuitBreakerPolicy()
+	for i := 0; i < policy.OpenThreshold; i++ {
+		cb.RecordError(ctx, 9, "upstream-real", false)
+	}
+	require.Equal(t, biz.StateOpen, cb.GetModelCircuitBreakerStats(ctx, 9, "upstream-real").State)
+
+	strategy := NewModelAwareCircuitBreakerStrategy(cb)
+	candidate := &ChannelModelsCandidate{
+		Channel: &biz.Channel{Channel: &ent.Channel{ID: 9, Name: "tripped", Settings: &objects.ChannelSettings{}}},
+		Models:  []biz.ChannelModelEntry{{RequestModel: "public-alias", ActualModel: "upstream-real"}},
+	}
+
+	scoringCtx := candidateScoringContext(contextWithRequestedModel(ctx, "public-alias"), candidate)
+	score := strategy.Score(scoringCtx, candidate.Channel, nil)
+	require.Zero(t, score, "an open attempt model must score zero, not the alias's neutral weight")
+
+	debugScore, debug := strategy.ScoreWithDebug(scoringCtx, candidate.Channel, nil)
+	require.Zero(t, debugScore)
+	require.Equal(t, string(biz.StateOpen), debug.Details["cb_state"])
+	require.Equal(t, "upstream-real", debug.Details["model_id"])
 }

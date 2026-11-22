@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -684,4 +685,30 @@ func TestLoadBalancer_Sort_TopK(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestLoadBalancerCandidateScoringContextLeavesOtherStrategiesUnchanged locks the
+// blast radius of the per-candidate context injection: a strategy that ignores
+// the model dimension must produce identical scores with and without it, and a
+// candidate without resolved models must not receive the key at all.
+func TestLoadBalancerCandidateScoringContextLeavesOtherStrategiesUnchanged(t *testing.T) {
+	ctx := context.Background()
+	candidate := &ChannelModelsCandidate{
+		Channel: &biz.Channel{Channel: &ent.Channel{ID: 11, Name: "plain", OrderingWeight: 50}},
+		Models:  []biz.ChannelModelEntry{{RequestModel: "alias", ActualModel: "upstream"}},
+	}
+	empty := &ChannelModelsCandidate{
+		Channel: &biz.Channel{Channel: &ent.Channel{ID: 12, Name: "no-model"}},
+	}
+
+	weight := NewWeightStrategy()
+	require.Equal(t, weight.Score(ctx, candidate.Channel, nil), weight.Score(candidateScoringContext(ctx, candidate), candidate.Channel, nil))
+
+	roundRobin := NewWeightRoundRobinStrategy()
+	require.Equal(t,
+		math.Round(roundRobin.Score(candidateScoringContext(ctx, candidate), candidate.Channel, nil)*1000),
+		math.Round(roundRobin.Score(ctx, candidate.Channel, nil)*1000),
+	)
+
+	require.Equal(t, ctx, candidateScoringContext(ctx, empty), "a candidate without a resolved attempt model must not carry the key")
 }

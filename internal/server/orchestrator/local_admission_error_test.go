@@ -68,9 +68,8 @@ func TestLocalAdmissionDoesNotPenalizeHealthOrOverwritePerformance(t *testing.T)
 			cb := biz.NewModelCircuitBreaker()
 			cb.RecordError(ctx, 42, "m", false)
 			circuit := withModelCircuitBreaker(outbound, cb).(*modelCircuitBreakerTracker)
+			circuit.attempt = breakerAttemptKeys{channelID: 42, modelID: "m"}
 			circuit.probeActive = true
-			circuit.probeChannelID = 42
-			circuit.probeModelID = "m"
 			circuit.OnOutboundRawError(ctx, wrapped)
 			require.False(t, circuit.probeActive, "admission failure still releases a probe lease")
 			require.Equal(t, 1, cb.GetModelCircuitBreakerStats(ctx, 42, "m").ConsecutiveFailures)
