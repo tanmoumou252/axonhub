@@ -109,6 +109,12 @@ type Config struct {
 
 	SSEKeepAlive SSEKeepAlive `conf:"sse_keep_alive" yaml:"sse_keep_alive" json:"sse_keep_alive"`
 
+	// FakeStream is the global master switch for channel-level fake-stream
+	// policies. Disabled by default so existing deployments keep exact behavior.
+	FakeStream struct {
+		Enabled bool `conf:"enabled" yaml:"enabled" json:"enabled"`
+	} `conf:"fake_stream" yaml:"fake_stream" json:"fake_stream"`
+
 	Trace     tracing.Config `conf:"trace" yaml:"trace" json:"trace"`
 	Dashboard Dashboard      `conf:"dashboard" yaml:"dashboard" json:"dashboard"`
 

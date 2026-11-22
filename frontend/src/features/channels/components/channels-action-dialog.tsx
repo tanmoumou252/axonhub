@@ -1009,7 +1009,7 @@ export function ChannelsActionDialog({
             type: currentRow.type,
             baseURL: getInitialBaseURL(currentRow),
             name: currentRow.name,
-            policies: currentRow.policies ?? { stream: 'unlimited' },
+            policies: currentRow.policies ?? { stream: 'unlimited', fakeStream: 'off' },
             supportedModels: currentRow.supportedModels,
             autoSyncSupportedModels: currentRow.autoSyncSupportedModels,
             autoSyncModelPattern: currentRow.autoSyncModelPattern || '',
@@ -1035,7 +1035,7 @@ export function ChannelsActionDialog({
               type: duplicateFromRow.type,
               baseURL: getInitialBaseURL(duplicateFromRow),
               name: duplicateFromRow.name,
-              policies: duplicateFromRow.policies ?? { stream: 'unlimited' },
+              policies: duplicateFromRow.policies ?? { stream: 'unlimited', fakeStream: 'off' },
               supportedModels: duplicateFromRow.supportedModels,
               autoSyncSupportedModels: duplicateFromRow.autoSyncSupportedModels,
               autoSyncModelPattern: duplicateFromRow.autoSyncModelPattern || '',
@@ -1060,7 +1060,7 @@ export function ChannelsActionDialog({
               type: derivedChannelType,
               baseURL: getDefaultBaseURL(derivedChannelType),
               name: '',
-              policies: { stream: 'unlimited' },
+              policies: { stream: 'unlimited', fakeStream: 'off' },
               credentials: {
                 apiKeys: [],
                 vertexApiKeys: isVertexChannelType(derivedChannelType) ? [emptyVertexAPIKey()] : [],
@@ -3318,6 +3318,33 @@ export function ChannelsActionDialog({
                                   { value: 'unlimited', label: t('channels.dialogs.fields.streamPolicy.options.unlimited') },
                                   { value: 'require', label: t('channels.dialogs.fields.streamPolicy.options.require') },
                                   { value: 'forbid', label: t('channels.dialogs.fields.streamPolicy.options.forbid') },
+                                ]}
+                              />
+                              <FormMessage />
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name='policies.fakeStream'
+                        render={({ field }) => (
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
+                              {t('channels.dialogs.fields.fakeStream.label')}
+                            </FormLabel>
+                            <div className='space-y-1 md:col-span-6'>
+                              <SelectDropdown
+                                defaultValue={(field.value as string) || 'off'}
+                                onValueChange={(value) => field.onChange(value)}
+                                placeholder={t('channels.dialogs.fields.fakeStream.placeholder')}
+                                data-testid='channel-fake-stream-select'
+                                isControlled={true}
+                                items={[
+                                  { value: 'off', label: t('channels.dialogs.fields.fakeStream.options.off') },
+                                  { value: 'placeholder', label: t('channels.dialogs.fields.fakeStream.options.placeholder') },
+                                  { value: 'fake_stream', label: t('channels.dialogs.fields.fakeStream.options.fake_stream') },
                                 ]}
                               />
                               <FormMessage />

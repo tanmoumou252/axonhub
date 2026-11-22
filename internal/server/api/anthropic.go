@@ -37,6 +37,7 @@ type AnthropicHandlersParams struct {
 	PluginManager               *plugin.Manager
 	SSEKeepAliveConfig          SSEKeepAliveConfig
 	SafeguardsConfig            safeguards.Config `optional:"true"`
+	FakeStreamEnabled           FakeStreamEnabled `optional:"true"`
 }
 
 type AnthropicHandlers struct {
@@ -65,6 +66,7 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 				params.ProviderQuotaStatusProvider,
 				orchestratorPlugins(params.PluginManager)),
 			sseKeepAlive:             params.SSEKeepAliveConfig,
+			fakeStreamEnabled:        bool(params.FakeStreamEnabled),
 			sseHeartbeatFormat:       sseHeartbeatAnthropic,
 			streamProtocol:           StreamProtocolAnthropic,
 			safeguardsConfig:         params.SafeguardsConfig,

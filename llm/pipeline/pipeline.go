@@ -477,6 +477,16 @@ func (p *pipeline) processRequest(ctx context.Context, request *llm.Request) (*R
 
 	var result *Result
 	switch {
+	case originalWantStream && fakeStreamModeOf(p.Outbound) == FakeStreamModeFake && supportsFakeStreamSynthesis(request):
+		// Mode B: client wants a stream, channel policy forces upstream non-stream,
+		// then synthesizes a protocol-conformant SSE stream from the complete response.
+		result = &Result{Stream: true}
+		nonStreamReq := *httpReq
+		stream, err := p.synthesizeStreamFromNonStream(ctx, executor, &nonStreamReq)
+		if err != nil {
+			return nil, err
+		}
+		result.EventStream = stream
 	case originalWantStream:
 		result = &Result{
 			Stream: true,

@@ -591,6 +591,7 @@ type ComplexityRoot struct {
 	ChannelPolicies struct {
 		APIKeyAutoDisableMode  func(childComplexity int) int
 		APIKeyAutoDisableRules func(childComplexity int) int
+		FakeStream             func(childComplexity int) int
 		ScheduledDisable       func(childComplexity int) int
 		Stream                 func(childComplexity int) int
 	}
@@ -4869,6 +4870,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.ChannelPolicies.APIKeyAutoDisableRules(childComplexity), true
+	case "ChannelPolicies.fakeStream":
+		if e.complexity.ChannelPolicies.FakeStream == nil {
+			break
+		}
+
+		return e.complexity.ChannelPolicies.FakeStream(childComplexity), true
 	case "ChannelPolicies.scheduledDisable":
 		if e.complexity.ChannelPolicies.ScheduledDisable == nil {
 			break
@@ -24633,6 +24640,8 @@ func (ec *executionContext) fieldContext_Channel_policies(_ context.Context, fie
 			switch field.Name {
 			case "stream":
 				return ec.fieldContext_ChannelPolicies_stream(ctx, field)
+			case "fakeStream":
+				return ec.fieldContext_ChannelPolicies_fakeStream(ctx, field)
 			case "apiKeyAutoDisableMode":
 				return ec.fieldContext_ChannelPolicies_apiKeyAutoDisableMode(ctx, field)
 			case "apiKeyAutoDisableRules":
@@ -28130,6 +28139,35 @@ func (ec *executionContext) fieldContext_ChannelPolicies_stream(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type CapabilityPolicy does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelPolicies_fakeStream(ctx context.Context, field graphql.CollectedField, obj *objects.ChannelPolicies) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelPolicies_fakeStream,
+		func(ctx context.Context) (any, error) {
+			return obj.FakeStream, nil
+		},
+		nil,
+		ec.marshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelPolicies_fakeStream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelPolicies",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type FakeStreamMode does not have child fields")
 		},
 	}
 	return fc, nil
@@ -79183,7 +79221,7 @@ func (ec *executionContext) unmarshalInputChannelPoliciesInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"stream", "apiKeyAutoDisableMode", "apiKeyAutoDisableRules", "scheduledDisable"}
+	fieldsInOrder := [...]string{"stream", "fakeStream", "apiKeyAutoDisableMode", "apiKeyAutoDisableRules", "scheduledDisable"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -79197,6 +79235,13 @@ func (ec *executionContext) unmarshalInputChannelPoliciesInput(ctx context.Conte
 				return it, err
 			}
 			it.Stream = data
+		case "fakeStream":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fakeStream"))
+			data, err := ec.unmarshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FakeStream = data
 		case "apiKeyAutoDisableMode":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("apiKeyAutoDisableMode"))
 			data, err := ec.unmarshalOAPIKeyAutoDisableMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐAPIKeyAutoDisableMode(ctx, v)
@@ -107151,6 +107196,8 @@ func (ec *executionContext) _ChannelPolicies(ctx context.Context, sel ast.Select
 			out.Values[i] = graphql.MarshalString("ChannelPolicies")
 		case "stream":
 			out.Values[i] = ec._ChannelPolicies_stream(ctx, field, obj)
+		case "fakeStream":
+			out.Values[i] = ec._ChannelPolicies_fakeStream(ctx, field, obj)
 		case "apiKeyAutoDisableMode":
 			out.Values[i] = ec._ChannelPolicies_apiKeyAutoDisableMode(ctx, field, obj)
 		case "apiKeyAutoDisableRules":
@@ -136230,6 +136277,19 @@ func (ec *executionContext) unmarshalOExcludeAssociationInput2ᚕᚖgithubᚗcom
 		}
 	}
 	return res, nil
+}
+
+func (ec *executionContext) unmarshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode(ctx context.Context, v any) (objects.FakeStreamMode, error) {
+	tmp, err := graphql.UnmarshalString(v)
+	res := objects.FakeStreamMode(tmp)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode(ctx context.Context, sel ast.SelectionSet, v objects.FakeStreamMode) graphql.Marshaler {
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalString(string(v))
+	return res
 }
 
 func (ec *executionContext) marshalOFilterCondition2ᚕgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐConditionᚄ(ctx context.Context, sel ast.SelectionSet, v []objects.Condition) graphql.Marshaler {

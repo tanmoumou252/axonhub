@@ -63,6 +63,14 @@ func (m *performanceRecording) OnOutboundRawRequest(ctx context.Context, request
 		streamFlag = m.outbound.state.Perf.Stream
 	}
 
+	// Mode B forces the upstream to non-streaming, so first-token latency must be
+	// measured as whole-response time, not stream TTFT. The client still sees a
+	// stream (synthesized), but the upstream attempt is non-stream — record it as
+	// such so recordPerformanceStream/MarkFirstToken semantics stay honest (C09).
+	if m.outbound.FakeStreamMode() == pipeline.FakeStreamModeFake {
+		streamFlag = false
+	}
+
 	// Create a new PerformanceRecord instance for each request.
 	perf := biz.PerformanceRecord{}
 	perf.StartTime = time.Now()

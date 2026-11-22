@@ -696,6 +696,16 @@ const (
 	CapabilityPolicyForbid    CapabilityPolicy = "forbid"
 )
 
+// FakeStreamMode controls downstream placeholder/keep-alive decoupling from
+// upstream TTFT. It is orthogonal to CapabilityPolicy.
+type FakeStreamMode string
+
+const (
+	FakeStreamModeOff         FakeStreamMode = "off"
+	FakeStreamModePlaceholder FakeStreamMode = "placeholder"
+	FakeStreamModeFake        FakeStreamMode = "fake_stream"
+)
+
 type APIKeyAutoDisableMode string
 
 const (
@@ -730,6 +740,12 @@ func (e *APIKeyAutoDisableMode) UnmarshalGQL(v any) error {
 
 type ChannelPolicies struct {
 	Stream CapabilityPolicy `json:"stream,omitempty"`
+
+	// FakeStream gates downstream placeholder / non-stream-to-stream synthesis for
+	// streaming clients. It is independent of Stream (CapabilityPolicy), which
+	// gates whether a channel MAY stream, so the require/forbid filters stay intact.
+	// Empty/off preserves the existing direct-connect behavior.
+	FakeStream FakeStreamMode `json:"fakeStream,omitempty"`
 
 	// APIKeyAutoDisableMode selects how this channel combines with the global
 	// auto-disable rules: inherit (global only), custom (channel first, then

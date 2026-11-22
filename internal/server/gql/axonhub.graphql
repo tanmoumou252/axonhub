@@ -255,6 +255,12 @@ enum CapabilityPolicy {
   forbid
 }
 
+enum FakeStreamMode {
+  off
+  placeholder
+  fake_stream
+}
+
 enum APIKeyAutoDisableAction {
   temporary_disable
   disable_until_cron
@@ -306,6 +312,7 @@ input ChannelScheduledDisableInput {
 
 type ChannelPolicies {
   stream: CapabilityPolicy
+  fakeStream: FakeStreamMode
   apiKeyAutoDisableMode: APIKeyAutoDisableMode
   apiKeyAutoDisableRules: [APIKeyAutoDisableRule!]
   scheduledDisable: ChannelScheduledDisable
@@ -313,6 +320,7 @@ type ChannelPolicies {
 
 input ChannelPoliciesInput {
   stream: CapabilityPolicy
+  fakeStream: FakeStreamMode
   apiKeyAutoDisableMode: APIKeyAutoDisableMode
   apiKeyAutoDisableRules: [APIKeyAutoDisableRuleInput!]
   scheduledDisable: ChannelScheduledDisableInput

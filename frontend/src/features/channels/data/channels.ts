@@ -89,6 +89,7 @@ const CREATE_CHANNEL_MUTATION = `
       status
       policies {
         stream
+        fakeStream
         apiKeyAutoDisableMode
         apiKeyAutoDisableRules {
           statusCodes
@@ -198,6 +199,7 @@ const DUPLICATE_CHANNEL_MUTATION = `
       status
       policies {
         stream
+        fakeStream
         apiKeyAutoDisableMode
         apiKeyAutoDisableRules {
           statusCodes
@@ -307,6 +309,7 @@ const BULK_CREATE_CHANNELS_MUTATION = `
       status
       policies {
         stream
+        fakeStream
         apiKeyAutoDisableMode
         apiKeyAutoDisableRules {
           statusCodes
@@ -415,6 +418,7 @@ const CHANNEL_FIELDS_FRAGMENT = `
       status
       policies {
         stream
+        fakeStream
         apiKeyAutoDisableMode
         apiKeyAutoDisableRules {
           statusCodes
@@ -1024,6 +1028,7 @@ const CHANNEL_AUTO_DISABLE_COPY_SOURCES_QUERY = `
       id
       name
       policies {
+        fakeStream
         apiKeyAutoDisableMode
         apiKeyAutoDisableRules {
           statusCodes
@@ -1057,6 +1062,7 @@ const BULK_UPDATE_CHANNEL_AUTO_DISABLE_MUTATION = `
         name
         policies {
           stream
+          fakeStream
           apiKeyAutoDisableMode
           apiKeyAutoDisableRules {
             statusCodes
@@ -1181,6 +1187,7 @@ const CHANNEL_QUERY_FULL_NODE_SELECTION = `
           status
           policies {
             stream
+            fakeStream
             apiKeyAutoDisableMode
             apiKeyAutoDisableRules {
               statusCodes

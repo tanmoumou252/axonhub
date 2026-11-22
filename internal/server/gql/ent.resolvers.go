@@ -81,6 +81,10 @@ func (r *channelResolver) Policies(ctx context.Context, obj *ent.Channel) (*obje
 		obj.Policies.Stream = objects.CapabilityPolicyUnlimited
 	}
 
+	if obj.Policies.FakeStream == "" {
+		obj.Policies.FakeStream = objects.FakeStreamModeOff
+	}
+
 	return &obj.Policies, nil
 }
 

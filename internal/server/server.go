@@ -148,6 +148,7 @@ func Run(opts ...fx.Option) {
 					Interval: cfg.SSEKeepAlive.Interval,
 				}
 			}),
+			fx.Provide(func(cfg Config) api.FakeStreamEnabled { return api.FakeStreamEnabled(cfg.FakeStream.Enabled) }),
 			fx.Invoke(func(cfg log.Config) {
 				log.SetGlobalConfig(cfg)
 				tracing.SetupLogger(log.GetGlobalLogger())

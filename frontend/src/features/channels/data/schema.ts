@@ -159,6 +159,9 @@ export type ChannelStatus = z.infer<typeof channelStatusSchema>;
 export const capabilityPolicySchema = z.enum(['unlimited', 'require', 'forbid']);
 export type CapabilityPolicy = z.infer<typeof capabilityPolicySchema>;
 
+export const fakeStreamModeSchema = z.enum(['off', 'placeholder', 'fake_stream']);
+export type FakeStreamMode = z.infer<typeof fakeStreamModeSchema>;
+
 export const apiKeyAutoDisableActionSchema = z.enum([
   'temporary_disable',
   'disable_until_cron',
@@ -211,6 +214,7 @@ export type ChannelScheduledDisable = z.infer<typeof channelScheduledDisableSche
 
 export const channelPoliciesSchema = z.object({
   stream: capabilityPolicySchema.optional(),
+  fakeStream: fakeStreamModeSchema.optional(),
   apiKeyAutoDisableMode: z.preprocess(coerceApiKeyAutoDisableMode, apiKeyAutoDisableModeSchema.optional().nullable()),
   apiKeyAutoDisableRules: z.array(apiKeyAutoDisableRuleSchema).optional().nullable(),
   scheduledDisable: channelScheduledDisableSchema.optional().nullable(),

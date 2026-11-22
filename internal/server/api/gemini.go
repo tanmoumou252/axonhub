@@ -36,6 +36,7 @@ type GeminiHandlersParams struct {
 	ChannelLimiterManager       *orchestrator.ChannelLimiterManager
 	ProviderQuotaStatusProvider orchestrator.ProviderQuotaStatusProvider
 	PluginManager               *plugin.Manager
+	FakeStreamEnabled           FakeStreamEnabled `optional:"true"`
 }
 
 type GeminiHandlers struct {
@@ -45,7 +46,7 @@ type GeminiHandlers struct {
 }
 
 func NewGeminiHandlers(params GeminiHandlersParams) *GeminiHandlers {
-	return &GeminiHandlers{
+	handlers := &GeminiHandlers{
 		ChatCompletionHandlers: NewChatCompletionHandlers(
 			orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
@@ -66,6 +67,10 @@ func NewGeminiHandlers(params GeminiHandlersParams) *GeminiHandlers {
 		ChannelService: params.ChannelService,
 		ModelService:   params.ModelService,
 	}
+	handlers.ChatCompletionHandlers.fakeStreamEnabled = bool(params.FakeStreamEnabled)
+	handlers.ChatCompletionHandlers.sseHeartbeatFormat = sseHeartbeatOpenAI
+	handlers.ChatCompletionHandlers.streamProtocol = StreamProtocolGemini
+	return handlers
 }
 
 func (handlers *GeminiHandlers) GenerateContent(c *gin.Context) {

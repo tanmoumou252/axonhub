@@ -9,7 +9,7 @@ AxonHub provides an intelligent adaptive load balancing system that automaticall
 - **Session Consistency** - Requests from the same conversation are prioritized to route to previously successful channels
 - **Health Awareness** - Automatically avoids channels with high error rates
 - **Fair Distribution** - Uses Weighted Round Robin to distribute requests proportionally based on channel weights
-- **Latency Awareness** - Uses request-type-specific UX signals: streaming requests prioritize lower first-token latency and higher output throughput, while non-streaming requests prioritize lower end-to-end latency
+- **Latency Awareness** - Uses request-type-specific UX signals: streaming requests prioritize lower first-token latency and higher output throughput, while non-streaming requests prioritize lower end-to-end latency. With the channel Fake Stream `fake_stream` policy enabled (plus the global `server.fake_stream.enabled` switch), the upstream attempt is non-streaming and is measured by whole-response latency rather than stream TTFT.
 - **Rate Limit Awareness** - Respects upstream RPM/TPM/concurrency limits, falls back to the default connection tracker when `MaxConcurrent` is not explicitly configured, and automatically cools down channels on 429 Retry-After
 
 ### Multi-Strategy Scoring System

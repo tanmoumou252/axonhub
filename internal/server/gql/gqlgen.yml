@@ -151,6 +151,9 @@ models:
   CapabilityPolicy:
     model:
       - github.com/looplj/axonhub/internal/objects.CapabilityPolicy
+  FakeStreamMode:
+    model:
+      - github.com/looplj/axonhub/internal/objects.FakeStreamMode
   ChannelEndpoint:
     model:
       - github.com/looplj/axonhub/internal/objects.ChannelEndpoint

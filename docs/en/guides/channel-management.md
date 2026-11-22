@@ -18,6 +18,18 @@ Channel model mapping is the **last** step in a three-layer pipeline. For the fu
 
 In short: **API Key Profile renames → Model Association selects channel → Channel renames → Send upstream**
 
+## Fake Stream (Channel Policy)
+
+The **Fake Stream** policy (`fakeStream`) decouples downstream SSE delivery from upstream time-to-first-token. It is independent of the Stream Policy (`stream`): require/forbid filtering still applies. The global master switch `server.fake_stream.enabled` defaults to `false`; no request uses this feature until it is enabled.
+
+| Mode | Behavior |
+|------|----------|
+| `off` (default) | Direct connect; unchanged HTTP status and error semantics. |
+| `placeholder` | Commit `200 + text/event-stream` immediately with a protocol-legal placeholder and heartbeat, then splice the real upstream stream when it arrives. Failures after commit are delivered as in-band SSE error events. |
+| `fake_stream` | Force the upstream request to `stream:false`, keep the downstream placeholder alive, then synthesize a conformant SSE stream from the complete response (including content, reasoning, tool calls and finish events). |
+
+OpenAI Responses endpoints are excluded from this path and keep the existing synchronous behavior. Each mode requires the global master switch to be enabled.
+
 ## Creating a Channel
 
 ### Basic Steps

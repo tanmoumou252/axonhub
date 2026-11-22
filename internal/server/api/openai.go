@@ -51,6 +51,7 @@ type OpenAIHandlersParams struct {
 	PluginManager               *plugin.Manager
 	Client                      *ent.Client
 	SSEKeepAliveConfig          SSEKeepAliveConfig
+	FakeStreamEnabled           FakeStreamEnabled `optional:"true"`
 }
 
 type OpenAIHandlers struct {
@@ -362,6 +363,7 @@ func NewOpenAIHandlers(params OpenAIHandlersParams) *OpenAIHandlers {
 		handlers.TranslationHandlers,
 	} {
 		handler.sseKeepAlive = params.SSEKeepAliveConfig
+		handler.fakeStreamEnabled = bool(params.FakeStreamEnabled)
 		handler.sseHeartbeatFormat = sseHeartbeatOpenAI
 	}
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/log"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/middleware"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
 	"github.com/looplj/axonhub/internal/server/safeguards"
@@ -28,6 +29,10 @@ const (
 	errTypeQuotaExhausted = "quota_exhausted"
 	errCodeQuotaExhausted = "quota_exhausted"
 )
+
+// FakeStreamEnabled is the typed DI token for the global fake-stream master
+// switch; using a named type keeps unrelated optional bool fields unaffected.
+type FakeStreamEnabled bool
 
 // StreamWriter is a function type for writing stream events to the response.
 type StreamWriter func(c *gin.Context, stream streams.Stream[*httpclient.StreamEvent])
@@ -68,6 +73,7 @@ type ChatCompletionHandlers struct {
 	safeguardsConfigProvider   func(context.Context) (safeguards.Config, error)
 	reviewer                   safeguards.ClassifierFunc
 	inputUsageCache            *inputUsageCache
+	fakeStreamEnabled          bool
 }
 
 func NewChatCompletionHandlers(orchestrator *orchestrator.ChatCompletionOrchestrator) *ChatCompletionHandlers {
@@ -141,6 +147,50 @@ func (handlers *ChatCompletionHandlers) ChatCompletionWithRequest(c *gin.Context
 		processCtx, abortUpstream = context.WithCancel(ctx)
 		defer abortUpstream()
 	}
+
+	// Fake-stream Path A is gated by the global master switch, streaming clients,
+	// and supported endpoints. Every other request keeps the exact synchronous
+	// Process + writeback path below (C0 / E-R2-5).
+	if fakeStreamRouteEligible(handlers.fakeStreamEnabled, genericReq) {
+		decisionCh := make(chan objects.FakeStreamMode, 1)
+		fakeCtx, cancelProcess := context.WithCancel(processCtx)
+		defer cancelProcess()
+		runCtx := orchestrator.WithFakeStreamDecision(fakeCtx, func(mode objects.FakeStreamMode) {
+			select {
+			case decisionCh <- mode:
+			default:
+			}
+		})
+		resultCh := make(chan fakeStreamResult, 1)
+		// Single background Process goroutine (G1). The decision callback and the
+		// result both originate from this one call (C2b).
+		go func() {
+			r, err := handlers.ChatCompletionOrchestrator.Process(runCtx, genericReq)
+			resultCh <- fakeStreamResult{result: r, err: err}
+		}()
+
+		for {
+			select {
+			case mode := <-decisionCh:
+				if mode == objects.FakeStreamModePlaceholder || mode == objects.FakeStreamModeFake {
+					handlers.writeFakeSSEStream(c, resultCh, fakeCtx, cancelProcess, genericReq, evaluator, abortUpstream, started)
+					return
+				}
+				// off: 200 is not committed yet; preserve the HTTP error status (E-R2-4).
+				res := <-resultCh
+				handlers.finishFakeStreamResult(c, genericReq, res, ctx, evaluator, abortUpstream, started)
+				return
+			case res := <-resultCh:
+				// Process finished before a decision was reported (e.g. early failure).
+				handlers.finishFakeStreamResult(c, genericReq, res, ctx, evaluator, abortUpstream, started)
+				return
+			case <-ctx.Done():
+				cancelProcess()
+				return
+			}
+		}
+	}
+
 	result, err := handlers.ChatCompletionOrchestrator.Process(processCtx, genericReq)
 	if err != nil {
 		log.Error(ctx, "Error processing chat completion", log.Cause(err))
@@ -150,6 +200,58 @@ func (handlers *ChatCompletionHandlers) ChatCompletionWithRequest(c *gin.Context
 
 		return
 	}
+
+	handlers.writeChatCompletionResult(c, genericReq, result, evaluator, abortUpstream, started)
+}
+
+// fakeStreamRouteEligible is the single source of truth for entering the
+// fake-stream path. It uses a positive allowlist of the three protocol families
+// with protocol-correct placeholder frames (chat completion, Anthropic messages,
+// Gemini streamGenerateContent). Other streaming-capable endpoints such as
+// /responses, legacy /completions, /audio/* and transcription routes stay on the
+// synchronous path, so no family of binary/protocol-specific streams can be
+// polluted by a chat-shaped placeholder.
+func fakeStreamRouteEligible(enabled bool, req *httpclient.Request) bool {
+	if !enabled || req == nil || !requestStreams(req) {
+		return false
+	}
+	path := req.Path
+	return strings.HasSuffix(path, "/chat/completions") ||
+		strings.HasSuffix(path, "/messages") ||
+		strings.HasSuffix(path, ":streamGenerateContent")
+}
+
+// finishFakeStreamResult writes a background Process result before any 200 has
+// been committed. Errors keep their HTTP status; success uses the common helper.
+func (handlers *ChatCompletionHandlers) finishFakeStreamResult(
+	c *gin.Context,
+	genericReq *httpclient.Request,
+	res fakeStreamResult,
+	ctx context.Context,
+	evaluator *safeguards.Evaluator,
+	abortUpstream context.CancelFunc,
+	started time.Time,
+) {
+	if res.err != nil {
+		log.Error(ctx, "Error processing chat completion", log.Cause(res.err))
+		httpErr := transformOrchestratorError(ctx, res.err, handlers.ChatCompletionOrchestrator)
+		c.JSON(httpErr.StatusCode, json.RawMessage(httpErr.Body))
+		return
+	}
+	handlers.writeChatCompletionResult(c, genericReq, res.result, evaluator, abortUpstream, started)
+}
+
+// writeChatCompletionResult contains the existing success writeback for both the
+// synchronous path and the fake-stream splice path.
+func (handlers *ChatCompletionHandlers) writeChatCompletionResult(
+	c *gin.Context,
+	genericReq *httpclient.Request,
+	result orchestrator.ChatCompletionResult,
+	evaluator *safeguards.Evaluator,
+	abortUpstream context.CancelFunc,
+	started time.Time,
+) {
+	ctx := c.Request.Context()
 
 	writeForwardResponseHeaders(c, genericReq, result)
 
