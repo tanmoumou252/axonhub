@@ -576,7 +576,7 @@ type PersistentOutboundTransformer struct {
 // FakeStreamMode translates the current candidate's channel policy to the
 // pipeline enum. It implements pipeline.FakeStreamPolicy.
 func (p *PersistentOutboundTransformer) FakeStreamMode() pipeline.FakeStreamMode {
-	mode := fakeStreamOf(p.state.CurrentCandidate)
+	mode := effectiveFakeStreamMode(p.state.CurrentCandidate, p.state.CurrentModelIndex)
 	switch mode {
 	case objects.FakeStreamModePlaceholder:
 		return pipeline.FakeStreamModePlaceholder
@@ -766,7 +766,7 @@ func (p *PersistentOutboundTransformer) TransformRequest(ctx context.Context, ll
 	// complete upstream response, so the upstream request must be non-streaming.
 	// This runs after require/forbid forcing because the candidate has already
 	// passed those filters; it only rewrites the outbound attempt (E-A2).
-	if fakeStreamOf(candidate) == objects.FakeStreamModeFake && supportsAutoAggregateRequest(llmRequest) {
+	if effectiveFakeStreamMode(candidate, p.state.CurrentModelIndex) == objects.FakeStreamModeFake && supportsAutoAggregateRequest(llmRequest) {
 		llmRequest.Stream = lo.ToPtr(false)
 		if p.state != nil && p.state.LlmRequest != nil {
 			p.state.LlmRequest.Stream = llmRequest.Stream

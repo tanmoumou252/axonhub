@@ -288,3 +288,64 @@ func TestUpdateChannel_ModelProtocolsValidatedWithoutResentSettings(t *testing.T
 		require.Empty(t, updated.Settings.ModelProtocols)
 	})
 }
+
+func TestModelFakeStreamOverride(t *testing.T) {
+	enabled := true
+	disabled := false
+	tests := []struct {
+		name      string
+		settings  *objects.ChannelSettings
+		model     string
+		wantMode  objects.FakeStreamMode
+		wantFound bool
+	}{
+		{
+			name:      "override off",
+			settings:  &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", APIFormats: []string{"openai/chat_completions"}, Enabled: &enabled, FakeStream: objects.FakeStreamModeOff}}},
+			model:     "a",
+			wantMode:  objects.FakeStreamModeOff,
+			wantFound: true,
+		},
+		{
+			name:      "override fake",
+			settings:  &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", APIFormats: []string{"openai/chat_completions"}, Enabled: &enabled, FakeStream: objects.FakeStreamModeFake}}},
+			model:     "a",
+			wantMode:  objects.FakeStreamModeFake,
+			wantFound: true,
+		},
+		{
+			name:      "empty override inherits",
+			settings:  &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", APIFormats: []string{"openai/chat_completions"}, Enabled: &enabled}}},
+			model:     "a",
+			wantFound: false,
+		},
+		{
+			name:      "unknown override value inherits",
+			settings:  &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", APIFormats: []string{"openai/chat_completions"}, Enabled: &enabled, FakeStream: objects.FakeStreamMode("yes")}}},
+			model:     "a",
+			wantFound: false,
+		},
+		{
+			name:      "disabled entry does not participate",
+			settings:  &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", APIFormats: []string{"openai/chat_completions"}, Enabled: &disabled, FakeStream: objects.FakeStreamModeFake}}},
+			model:     "a",
+			wantFound: false,
+		},
+		{
+			name:      "unmatched model",
+			settings:  &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", APIFormats: []string{"openai/chat_completions"}, Enabled: &enabled, FakeStream: objects.FakeStreamModeFake}}},
+			model:     "b",
+			wantFound: false,
+		},
+		{name: "nil settings", settings: nil, model: "a", wantFound: false},
+		{name: "empty model", settings: &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{Model: "a", FakeStream: objects.FakeStreamModeFake}}}, model: "", wantFound: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Channel{Channel: &ent.Channel{Settings: tt.settings}}
+			mode, found := c.ModelFakeStreamOverride(tt.model)
+			require.Equal(t, tt.wantFound, found)
+			require.Equal(t, tt.wantMode, mode)
+		})
+	}
+}

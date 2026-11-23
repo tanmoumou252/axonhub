@@ -494,6 +494,33 @@ func (c *Channel) ForcedAPIFormats(model string) []string {
 	return nil
 }
 
+// ModelFakeStreamOverride returns the per-model FakeStream override for the given
+// request model, and whether an enabled override with a valid non-empty FakeStream
+// exists. It mirrors ForcedAPIFormats: only enabled entries participate, and the
+// first match wins. An empty FakeStream — or a value outside the off/placeholder/
+// fake_stream enum (possible only via hand-edited DB JSON, since the GraphQL enum
+// blocks the API path) — means "inherit the channel policy" and reports found=false,
+// so a garbage value never silently disables fake streaming (contract P1 退化语义).
+func (c *Channel) ModelFakeStreamOverride(model string) (objects.FakeStreamMode, bool) {
+	if c == nil || c.Channel == nil || c.Settings == nil || model == "" {
+		return "", false
+	}
+
+	for _, mp := range normalizeModelProtocols(c.Settings, c.Channel).ModelProtocols {
+		if mp.Model == model && mp.IsEnabled() {
+			switch mp.FakeStream {
+			case objects.FakeStreamModeOff, objects.FakeStreamModePlaceholder, objects.FakeStreamModeFake:
+				return mp.FakeStream, true
+			default:
+				// "" or an unknown value: inherit the channel policy.
+				return "", false
+			}
+		}
+	}
+
+	return "", false
+}
+
 func (c *Channel) platformTypeForGeminiEndpoint() string {
 	if c == nil || c.Channel == nil {
 		return ""

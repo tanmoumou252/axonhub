@@ -1098,6 +1098,7 @@ type ComplexityRoot struct {
 	ModelProtocol struct {
 		APIFormats func(childComplexity int) int
 		Enabled    func(childComplexity int) int
+		FakeStream func(childComplexity int) int
 		Model      func(childComplexity int) int
 	}
 
@@ -6698,6 +6699,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.ModelProtocol.Enabled(childComplexity), true
+	case "ModelProtocol.fakeStream":
+		if e.complexity.ModelProtocol.FakeStream == nil {
+			break
+		}
+
+		return e.complexity.ModelProtocol.FakeStream(childComplexity), true
 	case "ModelProtocol.model":
 		if e.complexity.ModelProtocol.Model == nil {
 			break
@@ -30008,6 +30015,8 @@ func (ec *executionContext) fieldContext_ChannelSettings_modelProtocols(_ contex
 				return ec.fieldContext_ModelProtocol_apiFormats(ctx, field)
 			case "enabled":
 				return ec.fieldContext_ModelProtocol_enabled(ctx, field)
+			case "fakeStream":
+				return ec.fieldContext_ModelProtocol_fakeStream(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModelProtocol", field.Name)
 		},
@@ -37462,6 +37471,35 @@ func (ec *executionContext) fieldContext_ModelProtocol_enabled(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelProtocol_fakeStream(ctx context.Context, field graphql.CollectedField, obj *objects.ModelProtocol) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelProtocol_fakeStream,
+		func(ctx context.Context) (any, error) {
+			return obj.FakeStream, nil
+		},
+		nil,
+		ec.marshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelProtocol_fakeStream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelProtocol",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type FakeStreamMode does not have child fields")
 		},
 	}
 	return fc, nil
@@ -84866,7 +84904,7 @@ func (ec *executionContext) unmarshalInputModelProtocolInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"model", "apiFormats", "enabled"}
+	fieldsInOrder := [...]string{"model", "apiFormats", "enabled", "fakeStream"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -84894,6 +84932,13 @@ func (ec *executionContext) unmarshalInputModelProtocolInput(ctx context.Context
 				return it, err
 			}
 			it.Enabled = data
+		case "fakeStream":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fakeStream"))
+			data, err := ec.unmarshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FakeStream = data
 		}
 	}
 
@@ -111252,6 +111297,8 @@ func (ec *executionContext) _ModelProtocol(ctx context.Context, sel ast.Selectio
 			}
 		case "enabled":
 			out.Values[i] = ec._ModelProtocol_enabled(ctx, field, obj)
+		case "fakeStream":
+			out.Values[i] = ec._ModelProtocol_fakeStream(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

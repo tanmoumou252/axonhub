@@ -160,12 +160,14 @@ type ModelProtocol {
   model: String!
   apiFormats: [String!]!
   enabled: Boolean
+  fakeStream: FakeStreamMode
 }
 
 input ModelProtocolInput {
   model: String!
   apiFormats: [String!]!
   enabled: Boolean
+  fakeStream: FakeStreamMode
 }
 
 # ProviderQuota carries credentials used only for provider quota polling

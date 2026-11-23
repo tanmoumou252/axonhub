@@ -158,6 +158,7 @@ const CREATE_CHANNEL_MUTATION = `
         modelProtocols {
           model
           apiFormats
+          fakeStream
           enabled
         }
         providerQuota {
@@ -268,6 +269,7 @@ const DUPLICATE_CHANNEL_MUTATION = `
         modelProtocols {
           model
           apiFormats
+          fakeStream
           enabled
         }
         providerQuota {
@@ -378,6 +380,7 @@ const BULK_CREATE_CHANNELS_MUTATION = `
         modelProtocols {
           model
           apiFormats
+          fakeStream
           enabled
         }
         providerQuota {
@@ -487,6 +490,7 @@ const CHANNEL_FIELDS_FRAGMENT = `
         modelProtocols {
           model
           apiFormats
+          fakeStream
           enabled
         }
         providerQuota {
@@ -731,6 +735,7 @@ const BULK_IMPORT_CHANNELS_MUTATION = `
           modelProtocols {
             model
             apiFormats
+            fakeStream
             enabled
           }
           providerQuota {
@@ -981,6 +986,7 @@ const BULK_UPDATE_CHANNEL_ORDERING_MUTATION = `
           modelProtocols {
             model
             apiFormats
+            fakeStream
             enabled
           }
           providerQuota {
@@ -1306,6 +1312,7 @@ const CHANNEL_QUERY_FULL_NODE_SELECTION = `
             modelProtocols {
               model
               apiFormats
+              fakeStream
               enabled
             }
             providerQuota {

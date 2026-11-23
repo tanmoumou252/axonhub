@@ -264,6 +264,7 @@ Force the available outbound protocols for a single model in the **Model Protoco
 - `apiFormats` expresses priority in configuration order; when the client's inbound protocol is in the list it connects directly, otherwise the first listed protocol is used through the unified conversion pipeline.
 - Enabled overrides may only reference `api_format`s the channel already provides (default or custom endpoints), validated on save; overrides are cleaned up automatically when a model is removed from the channel's supported list.
 - Endpoints and protocol overrides are committed atomically in a single save.
+- An optional `fakeStream` (`off` / `placeholder` / `fake_stream`) overrides the channel-level Fake Stream policy for just this model; when unset the model inherits the channel policy. A model bound to a physically stream-only endpoint (`openai/responses-ws`) cannot force a non-streaming upstream, so `fake_stream` degrades to `placeholder` there (the placeholder/heartbeat is preserved, the non-streaming force is skipped).
 
 ### Responses HTTP and WebSocket endpoints
 

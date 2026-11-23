@@ -337,6 +337,8 @@ export const modelProtocolSchema = z.object({
     .boolean()
     .nullish()
     .transform((value) => value ?? true),
+  // Per-model fake stream override; unset inherits the channel-level policy.
+  fakeStream: z.enum(['off', 'placeholder', 'fake_stream']).optional(),
 });
 export type ModelProtocol = z.infer<typeof modelProtocolSchema>;
 

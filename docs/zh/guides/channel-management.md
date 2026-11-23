@@ -262,6 +262,7 @@ https://custom-gateway.example.com/api##
 - `apiFormats` 按配置顺序表达优先级；客户端入站协议在列表中时优先直连，否则使用列表中的第一个协议并经统一转换管线转换。
 - 启用的覆盖只能引用渠道已具备的 `api_format`（默认端点或自定义端点），保存时校验；模型被移出渠道支持列表时自动清理对应覆盖。
 - 端点与协议覆盖在同一次保存中原子提交。
+- 可选的 `fakeStream`（`off` / `placeholder` / `fake_stream`）只为该模型覆盖渠道级假流式策略；不设置时继承渠道策略。绑定物理只能流式端点（`openai/responses-ws`）的模型无法强制非流式上游，因此 `fake_stream` 在该端点降级为 `placeholder`（保留占位/心跳，跳过强制非流式）。
 
 ### Responses HTTP 与 WebSocket 端点
 

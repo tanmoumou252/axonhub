@@ -77,3 +77,45 @@ func TestModeBForcesUpstreamNonStream(t *testing.T) {
 	require.NotNil(t, llmReq.Stream)
 	require.False(t, *llmReq.Stream)
 }
+
+func TestFakeStreamModeWSBoundIsPlaceholder(t *testing.T) {
+	ch := &biz.Channel{Channel: &ent.Channel{ID: 21, Name: "ws", Settings: &objects.ChannelSettings{}}}
+	ch.Policies.FakeStream = objects.FakeStreamModeFake
+	candidate := &ChannelModelsCandidate{
+		Channel:         ch,
+		Models:          []biz.ChannelModelEntry{{ActualModel: "m"}},
+		APIFormat:       "openai/responses-ws",
+		modelAPIFormats: []string{"openai/responses-ws"},
+	}
+	outbound := &PersistentOutboundTransformer{state: &PersistenceState{
+		CurrentCandidate:  candidate,
+		CurrentModelIndex: 0,
+	}}
+	require.Equal(t, pipeline.FakeStreamModePlaceholder, outbound.FakeStreamMode(),
+		"a fake_stream model bound to a stream-only ws endpoint must degrade to placeholder, not fake_stream")
+}
+
+func TestModeBNotForcedForWSBound(t *testing.T) {
+	ch := &biz.Channel{Channel: &ent.Channel{ID: 22, Name: "ws2", Settings: &objects.ChannelSettings{}}}
+	ch.Policies.FakeStream = objects.FakeStreamModeFake
+	capture := &streamCapturingTransformer{mockTransformer: &mockTransformer{}}
+	ch.Outbound = capture
+	candidate := &ChannelModelsCandidate{
+		Channel:         ch,
+		Models:          []biz.ChannelModelEntry{{ActualModel: "m"}},
+		APIFormat:       "openai/responses-ws",
+		modelAPIFormats: []string{"openai/responses-ws"},
+	}
+	llmReq := &llm.Request{Stream: lo.ToPtr(true), Model: "m"}
+	outbound := &PersistentOutboundTransformer{
+		state: &PersistenceState{
+			ChannelModelsCandidates: []*ChannelModelsCandidate{candidate},
+			LlmRequest:              llmReq,
+		},
+	}
+
+	_, err := outbound.TransformRequest(context.Background(), llmReq)
+	require.NoError(t, err)
+	require.NotNil(t, capture.seen)
+	require.True(t, *capture.seen, "ws-bound model must keep stream:true (Mode B force must not fire)")
+}

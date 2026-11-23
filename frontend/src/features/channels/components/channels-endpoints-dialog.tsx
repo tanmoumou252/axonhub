@@ -250,6 +250,7 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
   const [newPath, setNewPath] = useState('');
   const [newBaseURL, setNewBaseURL] = useState('');
   const [modelProtocols, setModelProtocols] = useState<ModelProtocol[]>(() => getInitialModelProtocols(channel));
+  const [newProtocolFakeStream, setNewProtocolFakeStream] = useState<string>('inherit');
   const [newProtocolModel, setNewProtocolModel] = useState('');
   const [newProtocolFormats, setNewProtocolFormats] = useState<string[]>([]);
   const [editingProtocolModel, setEditingProtocolModel] = useState<string | null>(null);
@@ -437,21 +438,24 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
       return;
     }
 
+    const fakeStream = newProtocolFakeStream === 'inherit' ? undefined : (newProtocolFakeStream as ModelProtocol['fakeStream']);
     if (editingProtocolModel) {
       setModelProtocols((prev) =>
-        prev.map((mp) => (mp.model === editingProtocolModel ? { ...mp, model, apiFormats: [...newProtocolFormats] } : mp))
+        prev.map((mp) => (mp.model === editingProtocolModel ? { ...mp, model, apiFormats: [...newProtocolFormats], fakeStream } : mp))
       );
     } else {
-      setModelProtocols((prev) => [...prev, { model, apiFormats: [...newProtocolFormats], enabled: true }]);
+      setModelProtocols((prev) => [...prev, { model, apiFormats: [...newProtocolFormats], enabled: true, fakeStream }]);
     }
     setNewProtocolModel('');
     setNewProtocolFormats([]);
+    setNewProtocolFakeStream('inherit');
     setEditingProtocolModel(null);
-  }, [editingProtocolModel, newProtocolModel, newProtocolFormats, modelProtocols, t]);
+  }, [editingProtocolModel, newProtocolModel, newProtocolFormats, newProtocolFakeStream, modelProtocols, t]);
 
   const handleStartEditModelProtocol = useCallback((protocol: ModelProtocol) => {
     setNewProtocolModel(protocol.model);
     setNewProtocolFormats([...protocol.apiFormats]);
+    setNewProtocolFakeStream(protocol.fakeStream ?? 'inherit');
     setEditingProtocolModel(protocol.model);
     setError(null);
   }, []);
@@ -459,6 +463,7 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
   const handleCancelEditModelProtocol = useCallback(() => {
     setNewProtocolModel('');
     setNewProtocolFormats([]);
+    setNewProtocolFakeStream('inherit');
     setEditingProtocolModel(null);
     setError(null);
   }, []);
@@ -779,6 +784,17 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
                   placeholder={t('channels.endpoints.modelProtocols.formatsPlaceholder')}
                   portalContainer={dialogContentElement}
                 />
+                <Select value={newProtocolFakeStream} onValueChange={setNewProtocolFakeStream}>
+                  <SelectTrigger className='mt-2 h-8 text-xs'>
+                    <SelectValue placeholder={t('channels.endpoints.modelProtocols.fakeStream.label')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='inherit'>{t('channels.endpoints.modelProtocols.fakeStream.inherit')}</SelectItem>
+                    <SelectItem value='off'>{t('channels.dialogs.fields.fakeStream.options.off')}</SelectItem>
+                    <SelectItem value='placeholder'>{t('channels.dialogs.fields.fakeStream.options.placeholder')}</SelectItem>
+                    <SelectItem value='fake_stream'>{t('channels.dialogs.fields.fakeStream.options.fake_stream')}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className='flex items-center gap-2 justify-self-end md:col-start-4 md:justify-self-auto'>
                 <Button
@@ -832,6 +848,11 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
                           {format}
                         </Badge>
                       ))}
+                      {mp.fakeStream && (
+                        <Badge variant='outline' className='font-mono text-xs'>
+                          {t(`channels.dialogs.fields.fakeStream.options.${mp.fakeStream}`)}
+                        </Badge>
+                      )}
                       <Button
                         type='button'
                         variant='ghost'

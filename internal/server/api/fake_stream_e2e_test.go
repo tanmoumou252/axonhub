@@ -54,10 +54,18 @@ const fakeStreamAnthropicRequestBody = `{"model":"gpt-test","max_tokens":64,"str
 
 const fakeStreamUpstreamJSONBody = `{"id":"chatcmpl-fake","object":"chat.completion","created":1760000000,"model":"gpt-test","choices":[{"index":0,"message":{"role":"assistant","content":"hello fake"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`
 
-// fakeStreamE2EUpstream pairs one httptest upstream with its channel policies.
+// fakeStreamUpstreamSSEBody is a terminal OpenAI chat-completion SSE stream. The
+// off path (per-model override opts out of fake streaming) does NOT force
+// stream:false, so the upstream must answer a real stream rather than a complete
+// JSON body.
+const fakeStreamUpstreamSSEBody = "data: {\"id\":\"chatcmpl-fake\",\"object\":\"chat.completion.chunk\",\"created\":1760000000,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello fake\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}\n\ndata: [DONE]\n\n"
+
+// fakeStreamE2EUpstream pairs one httptest upstream with its channel policies
+// and optional channel settings (e.g. per-model fake stream overrides).
 type fakeStreamE2EUpstream struct {
 	handler  http.HandlerFunc
 	policies objects.ChannelPolicies
+	settings *objects.ChannelSettings
 }
 
 type fakeStreamE2EFixture struct {
@@ -82,7 +90,11 @@ func newFakeStreamE2EFixture(t *testing.T, upstreams ...fakeStreamE2EUpstream) *
 	for i, spec := range upstreams {
 		server := httptest.NewServer(spec.handler)
 		f.upstreams = append(f.upstreams, server)
-		channelRow, err := client.Channel.Create().SetType(channel.TypeOpenai).SetName(fmt.Sprintf("fake-stream-e2e-channel-%d", i)).SetBaseURL(server.URL).SetCredentials(objects.ChannelCredentials{APIKey: "synthetic"}).SetSupportedModels([]string{fakeStreamE2EModel}).SetDefaultTestModel(fakeStreamE2EModel).SetStatus(channel.StatusEnabled).SetPolicies(spec.policies).SetEndpoints([]objects.ChannelEndpoint{{APIFormat: llm.APIFormatOpenAIChatCompletion.String(), BaseURL: server.URL, Transport: objects.ChannelEndpointTransportHTTP}}).Save(ctx)
+		channelCreate := client.Channel.Create().SetType(channel.TypeOpenai).SetName(fmt.Sprintf("fake-stream-e2e-channel-%d", i)).SetBaseURL(server.URL).SetCredentials(objects.ChannelCredentials{APIKey: "synthetic"}).SetSupportedModels([]string{fakeStreamE2EModel}).SetDefaultTestModel(fakeStreamE2EModel).SetStatus(channel.StatusEnabled).SetPolicies(spec.policies).SetEndpoints([]objects.ChannelEndpoint{{APIFormat: llm.APIFormatOpenAIChatCompletion.String(), BaseURL: server.URL, Transport: objects.ChannelEndpointTransportHTTP}})
+		if spec.settings != nil {
+			channelCreate = channelCreate.SetSettings(spec.settings)
+		}
+		channelRow, err := channelCreate.Save(ctx)
 		require.NoError(t, err)
 		f.channelRows = append(f.channelRows, channelRow)
 	}
@@ -181,6 +193,19 @@ func fakeStreamCompleteJSONUpstream(body string, seen chan<- []byte) http.Handle
 	}
 }
 
+// fakeStreamSSEUpstream answers a real OpenAI chat-completion SSE stream. The off
+// path (per-model override opts out of fake streaming) keeps the upstream
+// streaming, so the fake (non-streaming JSON) upstream cannot terminate it.
+func fakeStreamSSEUpstream(body string, seen chan<- []byte) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		payload, _ := io.ReadAll(r.Body)
+		seen <- payload
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, body)
+		w.(http.Flusher).Flush()
+	}
+}
+
 func fakeStreamErrorUpstream() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -260,6 +285,19 @@ func waitForUpstreamPayload(t *testing.T, seen <-chan []byte) {
 		require.Contains(t, string(payload), `"stream":false`)
 	case <-time.After(2 * time.Second):
 		t.Fatal("upstream never received the non-stream request")
+	}
+}
+
+// waitForUpstreamStreamPayload asserts the upstream kept streaming (Mode B force
+// skipped), the execution-layer counterpart of an off decision from a per-model
+// override opting out of fake streaming.
+func waitForUpstreamStreamPayload(t *testing.T, seen <-chan []byte) {
+	t.Helper()
+	select {
+	case payload := <-seen:
+		require.Contains(t, string(payload), `"stream":true`)
+	case <-time.After(2 * time.Second):
+		t.Fatal("upstream never received the streaming request")
 	}
 }
 
@@ -369,4 +407,47 @@ func TestFakeStreamE2E_AnthropicTCPResetEmitsClassifiedErrorFrame(t *testing.T) 
 	require.Contains(t, wire, "event:error")
 	require.Contains(t, wire, "upstream_stream_interrupted")
 	require.True(t, hasSSEFrameWithTopLevelErrorType(wire), "Anthropic error frame data must carry a top-level type discriminator; wire=%s", wire)
+}
+
+func TestFakeStreamE2E_PerModelOverrideEnablesFake(t *testing.T) {
+	seen := make(chan []byte, 1)
+	f := newFakeStreamE2EFixture(t, fakeStreamE2EUpstream{
+		handler:  fakeStreamCompleteJSONUpstream(fakeStreamUpstreamJSONBody, seen),
+		policies: objects.ChannelPolicies{FakeStream: objects.FakeStreamModeOff},
+		settings: &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{
+			Model:      fakeStreamE2EModel,
+			APIFormats: []string{llm.APIFormatOpenAIChatCompletion.String()},
+			FakeStream: objects.FakeStreamModeFake,
+		}}},
+	})
+	h := f.anthropicHandler(t)
+
+	status, wire := f.postMessages(t, h, fakeStreamAnthropicRequestBody)
+
+	// 渠道级 off + per-model fake_stream ⇒ 决策报 fake ⇒ 占位提交 + Mode B 合成。
+	require.Equal(t, http.StatusOK, status)
+	assertAnthropicSynthesisWire(t, wire)
+	waitForUpstreamPayload(t, seen)
+}
+
+func TestFakeStreamE2E_PerModelOverrideOptsOut(t *testing.T) {
+	seen := make(chan []byte, 1)
+	f := newFakeStreamE2EFixture(t, fakeStreamE2EUpstream{
+		handler:  fakeStreamSSEUpstream(fakeStreamUpstreamSSEBody, seen),
+		policies: objects.ChannelPolicies{FakeStream: objects.FakeStreamModeFake},
+		settings: &objects.ChannelSettings{ModelProtocols: []objects.ModelProtocol{{
+			Model:      fakeStreamE2EModel,
+			APIFormats: []string{llm.APIFormatOpenAIChatCompletion.String()},
+			FakeStream: objects.FakeStreamModeOff,
+		}}},
+	})
+	h := f.anthropicHandler(t)
+
+	status, wire := f.postMessages(t, h, fakeStreamAnthropicRequestBody)
+
+	// 渠道级 fake + per-model off ⇒ 决策 off ⇒ 走同步路径不提交占位（对齐既有同步用例断言形态）。
+	require.Equal(t, http.StatusOK, status)
+	require.NotContains(t, wire, "event: ping", "per-model off override must opt the model out of fake streaming")
+	// off 有效模式 ⇒ Mode B 强制跳过 ⇒ 上游保持 stream:true（执行层证据，与占位断言互补）。
+	waitForUpstreamStreamPayload(t, seen)
 }

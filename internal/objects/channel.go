@@ -150,6 +150,11 @@ type ModelProtocol struct {
 	// A nil value is treated as enabled for backwards compatibility with entries
 	// written before the flag was introduced.
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// FakeStream overrides the channel-level Policies.FakeStream for this model.
+	// An empty value inherits the channel policy; a non-empty value (off,
+	// placeholder or fake_stream) wins. Mirrors the Enabled nil-default idiom.
+	FakeStream FakeStreamMode `json:"fakeStream,omitempty"`
 }
 
 // IsEnabled reports whether this model protocol override is active. Missing

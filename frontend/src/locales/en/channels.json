@@ -937,6 +937,8 @@
   "channels.endpoints.modelProtocols.noModelsAvailable": "No models are configured for this channel",
   "channels.endpoints.modelProtocols.allModelsConfigured": "All channel models already have a protocol override",
   "channels.endpoints.modelProtocols.formatsPlaceholder": "Select outbound protocols (multi-select)",
+  "channels.endpoints.modelProtocols.fakeStream.label": "Fake stream",
+  "channels.endpoints.modelProtocols.fakeStream.inherit": "Inherit channel policy",
   "channels.endpoints.modelProtocols.add": "Add Override",
   "channels.endpoints.modelProtocols.empty": "No model protocol overrides. All models can use every endpoint of this channel.",
   "channels.endpoints.modelProtocols.count": "{{count}} configured",

@@ -937,6 +937,8 @@
   "channels.endpoints.modelProtocols.noModelsAvailable": "当前渠道未配置模型",
   "channels.endpoints.modelProtocols.allModelsConfigured": "所有渠道模型均已有协议覆盖",
   "channels.endpoints.modelProtocols.formatsPlaceholder": "选择出站协议（可多选）",
+  "channels.endpoints.modelProtocols.fakeStream.label": "假流式",
+  "channels.endpoints.modelProtocols.fakeStream.inherit": "跟随渠道策略",
   "channels.endpoints.modelProtocols.add": "添加覆盖",
   "channels.endpoints.modelProtocols.empty": "未配置模型协议覆盖，所有模型可使用本渠道全部端点。",
   "channels.endpoints.modelProtocols.count": "已配置 {{count}} 条",
