@@ -1,7 +1,8 @@
 // 职责: Mode A 假流式写入器的时序与契约测试：先提交 200/SSE/占位帧，再心跳，最后无缝拼接真实流。
 // 关联文件:
-//   internal/server/api/fake_stream_writer.go
-//   internal/server/api/chat.go
+//
+//	internal/server/api/fake_stream_writer.go
+//	internal/server/api/chat.go
 package api
 
 import (
@@ -39,8 +40,8 @@ func (g *fakeStreamGate) Current() *httpclient.StreamEvent {
 	g.idx++
 	return cur
 }
-func (g *fakeStreamGate) Err() error                       { return nil }
-func (g *fakeStreamGate) Close() error                     { return nil }
+func (g *fakeStreamGate) Err() error   { return nil }
+func (g *fakeStreamGate) Close() error { return nil }
 
 func TestFakeSSEStream_OpenAI_PlaceholderBeforeResultThenSplice(t *testing.T) {
 	w := httptest.NewRecorder()
@@ -168,6 +169,26 @@ func TestFakeSSEStream_ErrorAfterPlaceholderIsInBand(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Contains(t, w.Body.String(), `event:error`)
 	require.Contains(t, w.Body.String(), "upstream exploded")
+}
+
+func TestFakeSSEStream_AnthropicErrorFrameIsConformant(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	h := &ChatCompletionHandlers{
+		sseKeepAlive:       SSEKeepAliveConfig{Interval: time.Hour},
+		sseHeartbeatFormat: sseHeartbeatAnthropic,
+		streamProtocol:     StreamProtocolAnthropic,
+	}
+	resultCh := make(chan fakeStreamResult, 1)
+	resultCh <- fakeStreamResult{err: &llmUpstreamError{message: "provider stalled"}}
+	processCtx, cancelProcess := context.WithCancel(c.Request.Context())
+	defer cancelProcess()
+	h.writeFakeSSEStream(c, resultCh, processCtx, cancelProcess, &httpclient.Request{Body: []byte(`{"stream":true}`)}, nil, nil, time.Now())
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), "event:error\n")
+	require.True(t, hasSSEFrameWithTopLevelErrorType(w.Body.String()), "Anthropic fake-stream error frame must carry a top-level type discriminator; body=%s", w.Body.String())
 }
 
 func TestFakeSSEStream_ClientDisconnectCancelsProcess(t *testing.T) {

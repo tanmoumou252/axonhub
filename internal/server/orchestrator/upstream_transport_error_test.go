@@ -5,7 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -87,4 +91,49 @@ func TestClassifyUpstreamStreamIdleTimeout(t *testing.T) {
 	require.Equal(t, http.StatusBadGateway, responseError.StatusCode)
 	require.ErrorIs(t, err, httpclient.ErrStreamIdleTimeout)
 	require.Same(t, err, ClassifyUpstreamTransportError(err))
+}
+
+func TestIsUpstreamTransportError_WinsockReset(t *testing.T) {
+	// Real Windows TCP-reset shapes: the windows syscall package exposes
+	// WSAECONNRESET (10054) / WSAECONNABORTED (10053) with their native Winsock
+	// values, which differ from the POSIX-numbered syscall.ECONNRESET that
+	// windows builds renumber into the invented APPLICATION_ERROR range.
+	wsReset := syscall.Errno(10054)
+	wsAbort := syscall.Errno(10053)
+	wsResetOpError := &net.OpError{Op: "read", Net: "tcp", Err: &os.SyscallError{Syscall: "wsarecv", Err: wsReset}}
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "bare winsock reset errno", err: wsReset, want: true},
+		{name: "winsock reset via syscall error", err: &os.SyscallError{Syscall: "wsarecv", Err: wsReset}, want: true},
+		{name: "winsock reset via net op error", err: wsResetOpError, want: true},
+		{name: "winsock reset via url error", err: &url.Error{Op: "Post", URL: "https://example.invalid", Err: wsResetOpError}, want: true},
+		{name: "winsock abort errno", err: wsAbort, want: true},
+		{name: "other errno stays unclassified", err: syscall.Errno(10060), want: false},
+		{name: "cancellation wins over winsock reset", err: errors.Join(context.Canceled, wsReset), want: false},
+		{name: "classified winsock reset stays structured", err: ClassifyUpstreamTransportError(wsResetOpError), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, IsUpstreamTransportError(tt.err))
+		})
+	}
+}
+
+func TestClassifyUpstreamTransportError_WinsockReset(t *testing.T) {
+	cause := &net.OpError{Op: "read", Net: "tcp", Err: &os.SyscallError{Syscall: "wsarecv", Err: syscall.Errno(10054)}}
+
+	err := ClassifyUpstreamTransportError(cause)
+
+	respErr := &llm.ResponseError{}
+	require.True(t, errors.As(err, &respErr))
+	require.Equal(t, http.StatusBadGateway, respErr.StatusCode)
+	require.Equal(t, ErrTypeUpstreamError, respErr.Detail.Type)
+	require.Equal(t, ErrCodeUpstreamStreamInterrupted, respErr.Detail.Code)
+	// 错误文案跨平台不同（Windows=WSA 文案，Linux=errno 数字），只锁分类器前缀。
+	require.Contains(t, respErr.Detail.Message, "closed the connection before the response completed")
+	require.True(t, errors.Is(err, cause), "the winsock cause must stay matchable through the classified error")
 }

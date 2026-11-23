@@ -13,6 +13,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/looplj/axonhub/internal/log"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/api"
 	"github.com/looplj/axonhub/internal/server/backup"
 	"github.com/looplj/axonhub/internal/server/biz"
@@ -149,6 +150,7 @@ func Run(opts ...fx.Option) {
 				}
 			}),
 			fx.Provide(func(cfg Config) api.FakeStreamEnabled { return api.FakeStreamEnabled(cfg.FakeStream.Enabled) }),
+			fx.Provide(func(cfg Config) objects.FakeStreamDecisionScope { return cfg.FakeStream.DecisionScope }),
 			fx.Invoke(func(cfg log.Config) {
 				log.SetGlobalConfig(cfg)
 				tracing.SetupLogger(log.GetGlobalLogger())

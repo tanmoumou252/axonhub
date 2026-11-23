@@ -74,6 +74,7 @@ type ChatCompletionHandlers struct {
 	reviewer                   safeguards.ClassifierFunc
 	inputUsageCache            *inputUsageCache
 	fakeStreamEnabled          bool
+	fakeStreamScope            objects.FakeStreamDecisionScope
 }
 
 func NewChatCompletionHandlers(orchestrator *orchestrator.ChatCompletionOrchestrator) *ChatCompletionHandlers {
@@ -155,12 +156,15 @@ func (handlers *ChatCompletionHandlers) ChatCompletionWithRequest(c *gin.Context
 		decisionCh := make(chan objects.FakeStreamMode, 1)
 		fakeCtx, cancelProcess := context.WithCancel(processCtx)
 		defer cancelProcess()
-		runCtx := orchestrator.WithFakeStreamDecision(fakeCtx, func(mode objects.FakeStreamMode) {
-			select {
-			case decisionCh <- mode:
-			default:
-			}
-		})
+		runCtx := orchestrator.WithFakeStreamDecision(
+			orchestrator.WithFakeStreamDecisionScope(fakeCtx, handlers.fakeStreamScope),
+			func(mode objects.FakeStreamMode) {
+				select {
+				case decisionCh <- mode:
+				default:
+				}
+			},
+		)
 		resultCh := make(chan fakeStreamResult, 1)
 		// Single background Process goroutine (G1). The decision callback and the
 		// result both originate from this one call (C2b).

@@ -18,6 +18,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/model"
 	entprivacy "github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/log"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/middleware"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
@@ -51,7 +52,8 @@ type OpenAIHandlersParams struct {
 	PluginManager               *plugin.Manager
 	Client                      *ent.Client
 	SSEKeepAliveConfig          SSEKeepAliveConfig
-	FakeStreamEnabled           FakeStreamEnabled `optional:"true"`
+	FakeStreamEnabled           FakeStreamEnabled               `optional:"true"`
+	FakeStreamDecisionScope     objects.FakeStreamDecisionScope `optional:"true"`
 }
 
 type OpenAIHandlers struct {
@@ -364,6 +366,7 @@ func NewOpenAIHandlers(params OpenAIHandlersParams) *OpenAIHandlers {
 	} {
 		handler.sseKeepAlive = params.SSEKeepAliveConfig
 		handler.fakeStreamEnabled = bool(params.FakeStreamEnabled)
+		handler.fakeStreamScope = params.FakeStreamDecisionScope
 		handler.sseHeartbeatFormat = sseHeartbeatOpenAI
 	}
 

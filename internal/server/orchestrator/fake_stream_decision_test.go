@@ -72,3 +72,60 @@ func TestFakeStreamIsIndependentOfStreamPolicy(t *testing.T) {
 	require.Len(t, got, 1)
 	require.Equal(t, "synthetic", got[0].Models[0].RequestModel)
 }
+
+func TestFakeStreamDecisionMode(t *testing.T) {
+	t.Run("first_candidate keeps the delivered first-candidate semantics", func(t *testing.T) {
+		candidates := []*ChannelModelsCandidate{
+			fakeStreamCandidate(objects.FakeStreamModeOff),
+			fakeStreamCandidate(objects.FakeStreamModeFake),
+		}
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode(candidates, objects.FakeStreamDecisionScopeFirstCandidate))
+	})
+
+	t.Run("any_candidate commits when any candidate enables fake streaming", func(t *testing.T) {
+		candidates := []*ChannelModelsCandidate{
+			fakeStreamCandidate(objects.FakeStreamModeOff),
+			fakeStreamCandidate(objects.FakeStreamModePlaceholder),
+			fakeStreamCandidate(objects.FakeStreamModeFake),
+		}
+		require.Equal(t, objects.FakeStreamModePlaceholder, fakeStreamDecisionMode(candidates, objects.FakeStreamDecisionScopeAnyCandidate))
+	})
+
+	t.Run("any_candidate falls back to off when every candidate is off", func(t *testing.T) {
+		candidates := []*ChannelModelsCandidate{
+			fakeStreamCandidate(objects.FakeStreamModeOff),
+			fakeStreamCandidate(""),
+		}
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode(candidates, objects.FakeStreamDecisionScopeAnyCandidate))
+	})
+
+	t.Run("empty scope normalizes to first_candidate", func(t *testing.T) {
+		candidates := []*ChannelModelsCandidate{
+			fakeStreamCandidate(objects.FakeStreamModeOff),
+			fakeStreamCandidate(objects.FakeStreamModeFake),
+		}
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode(candidates, ""))
+	})
+
+	t.Run("unknown scope normalizes to first_candidate", func(t *testing.T) {
+		candidates := []*ChannelModelsCandidate{
+			fakeStreamCandidate(objects.FakeStreamModeOff),
+			fakeStreamCandidate(objects.FakeStreamModeFake),
+		}
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode(candidates, objects.FakeStreamDecisionScope("every_candidate")))
+	})
+
+	t.Run("nil and empty candidate lists normalize to off", func(t *testing.T) {
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode(nil, objects.FakeStreamDecisionScopeAnyCandidate))
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode([]*ChannelModelsCandidate{}, objects.FakeStreamDecisionScopeAnyCandidate))
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode([]*ChannelModelsCandidate{nil}, objects.FakeStreamDecisionScopeAnyCandidate))
+		require.Equal(t, objects.FakeStreamModeOff, fakeStreamDecisionMode(nil, objects.FakeStreamDecisionScopeFirstCandidate))
+	})
+
+	t.Run("scope travels through the context with first_candidate default", func(t *testing.T) {
+		ctx := WithFakeStreamDecisionScope(context.Background(), objects.FakeStreamDecisionScopeAnyCandidate)
+		require.Equal(t, objects.FakeStreamDecisionScopeAnyCandidate, fakeStreamScopeFrom(ctx))
+		require.Equal(t, objects.FakeStreamDecisionScopeFirstCandidate, fakeStreamScopeFrom(context.Background()))
+		require.Equal(t, objects.FakeStreamDecisionScopeFirstCandidate, fakeStreamScopeFrom(WithFakeStreamDecisionScope(context.Background(), objects.FakeStreamDecisionScope("bogus"))))
+	})
+}

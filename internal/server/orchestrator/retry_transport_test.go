@@ -40,6 +40,9 @@ func TestRetryTransportClassification(t *testing.T) {
 	}{
 		{"wrapped connection reset", reset, true},
 		{"wrapped broken pipe", pipe, true},
+		{"winsock reset via op error", &net.OpError{Op: "read", Net: "tcp", Err: &os.SyscallError{Syscall: "wsarecv", Err: syscall.Errno(10054)}}, true},
+		{"winsock abort errno", syscall.Errno(10053), true},
+		{"cancellation with winsock reset", errors.Join(context.Canceled, syscall.Errno(10054)), false},
 		{"EOF", io.EOF, true},
 		{"unexpected EOF", io.ErrUnexpectedEOF, true},
 		{"LLM incomplete stream", llm.ErrStreamIncomplete, true},
@@ -119,11 +122,13 @@ func TestRetryTransportPipeline(t *testing.T) {
 	}{
 		{"same channel reset before content", syscall.ECONNRESET, 1, 0, false, false, []string{"first", "first"}},
 		{"same channel pipe before content", syscall.EPIPE, 1, 0, false, false, []string{"first", "first"}},
+		{"same channel winsock reset before content", syscall.Errno(10054), 1, 0, false, false, []string{"first", "first"}},
 		{"cross channel reset after same channel exhaustion", syscall.ECONNRESET, 2, 1, false, false, []string{"first", "first", "second"}},
 		{"cross channel pipe after same channel exhaustion", syscall.EPIPE, 2, 1, false, false, []string{"first", "first", "second"}},
 		{"h2 stream error before content", errors.New("stream error: stream ID 19; INTERNAL_ERROR; received from peer"), 1, 0, false, false, []string{"first", "first"}},
 		{"h2 stream error after content", errors.New("stream error: stream ID 19; INTERNAL_ERROR; received from peer"), 1, 1, true, true, []string{"first"}},
 		{"reset after content", syscall.ECONNRESET, 1, 1, true, true, []string{"first"}},
+		{"winsock reset after content", syscall.Errno(10054), 1, 1, true, true, []string{"first"}},
 		{"pipe after content", syscall.EPIPE, 1, 1, true, true, []string{"first"}},
 		{"local cancellation", context.Canceled, 1, 0, false, true, []string{"first"}},
 		{"local deadline", context.DeadlineExceeded, 1, 0, false, true, []string{"first"}},

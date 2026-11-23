@@ -30,6 +30,17 @@
 
 OpenAI Responses 端点不在该路径内，保持现有同步行为。所有模式均需先开启全局主开关。
 
+### 决策范围
+
+`server.fake_stream.decision_scope` 决定由哪个候选的渠道策略来触发提前提交占位（在上游首字耗时之前）：
+
+- `first_candidate`（默认）：只看首个被选中的候选。首候选为 `off` 时请求保持同步路径，HTTP 错误状态码语义保留。
+- `any_candidate`：候选列表中任一候选开启 `placeholder` 或 `fake_stream`，即提前提交占位。代价：`200 + text/event-stream` 已发出后，首候选失败只能以内联 SSE 错误帧下发，不再有 HTTP 错误状态码。
+
+### 本地验证假流式
+
+假流式可在没有真实上游的情况下本地验证：起一个本地 HTTP 服务作为假上游（`fake_stream` 返回完整非流式 JSON；`placeholder` 在首字节前挂住），把渠道指向它，再用 `curl` 发起流式请求。下游首字节由网关自身的占位/心跳产生；上游超时与候选切换对下游完全透明。
+
 ## 创建渠道
 
 ### 基本步骤

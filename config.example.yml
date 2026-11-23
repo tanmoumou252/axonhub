@@ -36,6 +36,7 @@ server:
     interval: "15s"              # Idle duration between heartbeats (env: AXONHUB_SERVER_SSE_KEEP_ALIVE_INTERVAL)
   fake_stream:
     enabled: false               # Enable channel-level fake-stream placeholder/synthesis policies (env: AXONHUB_SERVER_FAKE_STREAM_ENABLED)
+    decision_scope: "first_candidate" # Which candidate's policy commits the placeholder: first_candidate | any_candidate (env: AXONHUB_SERVER_FAKE_STREAM_DECISION_SCOPE)
   trace:
     thread_header: "AH-Thread-Id" # Thread ID header name (env: AXONHUB_SERVER_TRACE_THREAD_HEADER)
     trace_header: "AH-Trace-Id" # Trace ID header name (env: AXONHUB_SERVER_TRACE_TRACE_HEADER)

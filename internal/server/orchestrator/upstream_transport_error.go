@@ -55,7 +55,8 @@ func IsUpstreamTransportError(err error) bool {
 		errors.Is(err, llm.ErrStreamIncomplete) ||
 		errors.Is(err, ErrStreamIncomplete) ||
 		errors.Is(err, syscall.ECONNRESET) ||
-		errors.Is(err, syscall.EPIPE) {
+		errors.Is(err, syscall.EPIPE) ||
+		isWinsockResetError(err) {
 		return true
 	}
 
@@ -66,6 +67,29 @@ func IsUpstreamTransportError(err error) bool {
 	var netErr net.Error
 
 	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary())
+}
+
+// Winsock connection-reset errnos surfaced by real TCP resets and aborted
+// sockets on Windows. Go's windows syscall package defines them natively as
+// WSAECONNRESET (10054) and WSAECONNABORTED (10053) in
+// src/syscall/types_windows.go, while the POSIX-numbered syscall.ECONNRESET is
+// renumbered into the invented APPLICATION_ERROR range on windows builds — so
+// errors.Is(err, syscall.ECONNRESET) never matches a real Windows TCP reset.
+// POSIX errno values stay far below 10000, so these comparisons are dead code
+// on non-Windows platforms and cannot collide with any Unix errno.
+const (
+	winsockWSAECONNRESET   syscall.Errno = 10054
+	winsockWSAECONNABORTED syscall.Errno = 10053
+)
+
+// isWinsockResetError reports whether the error chain terminates in a Winsock
+// connection-reset errno (a real TCP RST or aborted socket on Windows).
+func isWinsockResetError(err error) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	return errno == winsockWSAECONNRESET || errno == winsockWSAECONNABORTED
 }
 
 // isHTTP2ConnectionError reports whether err is an HTTP/2 stream reset or GOAWAY from

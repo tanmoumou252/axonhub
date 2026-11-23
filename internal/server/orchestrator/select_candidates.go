@@ -117,10 +117,11 @@ func selectCandidates(inbound *PersistentInboundTransformer, quotaProvider Provi
 		// Store candidates directly (no need to extract channels)
 		inbound.state.ChannelModelsCandidates = candidates
 
-		// Notify the handler of the first candidate's fake-stream mode so it can
-		// commit a downstream placeholder before Process() blocks on upstream TTFT.
+		// Notify the handler of the fake-stream decision mode so it can commit a
+		// downstream placeholder before Process() blocks on upstream TTFT. The
+		// configured scope picks which candidate's policy drives the decision.
 		if cb, ok := fakeStreamDecisionFrom(ctx); ok {
-			cb(fakeStreamOf(candidates[0]))
+			cb(fakeStreamDecisionMode(candidates, fakeStreamScopeFrom(ctx)))
 		}
 
 		return llmRequest, nil

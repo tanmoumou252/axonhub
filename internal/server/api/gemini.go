@@ -11,6 +11,7 @@ import (
 
 	entprivacy "github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/log"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
 	"github.com/looplj/axonhub/internal/server/plugin"
@@ -36,7 +37,8 @@ type GeminiHandlersParams struct {
 	ChannelLimiterManager       *orchestrator.ChannelLimiterManager
 	ProviderQuotaStatusProvider orchestrator.ProviderQuotaStatusProvider
 	PluginManager               *plugin.Manager
-	FakeStreamEnabled           FakeStreamEnabled `optional:"true"`
+	FakeStreamEnabled           FakeStreamEnabled               `optional:"true"`
+	FakeStreamDecisionScope     objects.FakeStreamDecisionScope `optional:"true"`
 }
 
 type GeminiHandlers struct {
@@ -68,6 +70,7 @@ func NewGeminiHandlers(params GeminiHandlersParams) *GeminiHandlers {
 		ModelService:   params.ModelService,
 	}
 	handlers.ChatCompletionHandlers.fakeStreamEnabled = bool(params.FakeStreamEnabled)
+	handlers.ChatCompletionHandlers.fakeStreamScope = params.FakeStreamDecisionScope
 	handlers.ChatCompletionHandlers.sseHeartbeatFormat = sseHeartbeatOpenAI
 	handlers.ChatCompletionHandlers.streamProtocol = StreamProtocolGemini
 	return handlers

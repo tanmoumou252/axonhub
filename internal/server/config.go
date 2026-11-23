@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/safeguards"
 	"github.com/looplj/axonhub/internal/tracing"
 )
@@ -113,6 +114,11 @@ type Config struct {
 	// policies. Disabled by default so existing deployments keep exact behavior.
 	FakeStream struct {
 		Enabled bool `conf:"enabled" yaml:"enabled" json:"enabled"`
+		// DecisionScope selects which candidate's channel policy commits the
+		// downstream placeholder before upstream TTFT. first_candidate (default)
+		// keeps the delivered behavior; any_candidate commits the placeholder as
+		// soon as any candidate enables fake streaming.
+		DecisionScope objects.FakeStreamDecisionScope `conf:"decision_scope" yaml:"decision_scope" json:"decision_scope"`
 	} `conf:"fake_stream" yaml:"fake_stream" json:"fake_stream"`
 
 	Trace     tracing.Config `conf:"trace" yaml:"trace" json:"trace"`

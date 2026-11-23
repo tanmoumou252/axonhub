@@ -275,6 +275,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.sse_keep_alive.enabled", false)
 	v.SetDefault("server.sse_keep_alive.interval", "15s")
 	v.SetDefault("server.fake_stream.enabled", false)
+	v.SetDefault("server.fake_stream.decision_scope", "first_candidate")
 	v.SetDefault("server.trace.thread_header", "AH-Thread-Id")
 	v.SetDefault("server.trace.trace_header", "AH-Trace-Id")
 	v.SetDefault("server.trace.extra_trace_headers", []string{})

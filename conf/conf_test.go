@@ -408,3 +408,28 @@ func TestServerBasePathConfig(t *testing.T) {
 		t.Fatal("invalid base_path was accepted")
 	}
 }
+
+func TestFakeStreamDecisionScopeConfig(t *testing.T) {
+	configFile := writeTestConfig(t, "")
+	cfg, _, err := loadConfig(configFile)
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	if string(cfg.APIServer.FakeStream.DecisionScope) != "first_candidate" {
+		t.Fatalf("decision scope = %q, want first_candidate", cfg.APIServer.FakeStream.DecisionScope)
+	}
+
+	t.Setenv("AXONHUB_SERVER_FAKE_STREAM_DECISION_SCOPE", "any_candidate")
+	cfg, _, err = loadConfig(configFile)
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	if string(cfg.APIServer.FakeStream.DecisionScope) != "any_candidate" {
+		t.Fatalf("environment decision scope = %q, want any_candidate", cfg.APIServer.FakeStream.DecisionScope)
+	}
+
+	t.Setenv("AXONHUB_SERVER_FAKE_STREAM_DECISION_SCOPE", "yolo")
+	if _, _, err = loadConfig(configFile); err == nil {
+		t.Fatal("invalid decision scope was accepted")
+	}
+}

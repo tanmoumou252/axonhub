@@ -30,6 +30,17 @@ The **Fake Stream** policy (`fakeStream`) decouples downstream SSE delivery from
 
 OpenAI Responses endpoints are excluded from this path and keep the existing synchronous behavior. Each mode requires the global master switch to be enabled.
 
+### Decision Scope
+
+`server.fake_stream.decision_scope` selects which candidate's channel policy decides whether the placeholder is committed before upstream time-to-first-token:
+
+- `first_candidate` (default): only the first selected candidate decides. When it is `off`, the request keeps the synchronous path and HTTP error status codes are preserved.
+- `any_candidate`: the placeholder is committed as soon as any candidate in the list enables `placeholder` or `fake_stream`. Trade-off: because `200 + text/event-stream` has already been sent, a failure of the first candidate is delivered as an in-band SSE error frame instead of an HTTP error status.
+
+### Testing Fake Streaming Locally
+
+A fake streaming response is verifiable against a local upstream without any real provider: run the gateway against a local HTTP server that returns a complete non-streaming JSON body (`fake_stream`) or stalls before the first byte (`placeholder`), point a channel at it, and send a streaming request with `curl`. The gateway's own placeholder/heartbeat produces the first bytes to the client; upstream timeouts and candidate failover stay invisible downstream.
+
 ## Creating a Channel
 
 ### Basic Steps

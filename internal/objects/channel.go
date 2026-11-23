@@ -706,6 +706,29 @@ const (
 	FakeStreamModeFake        FakeStreamMode = "fake_stream"
 )
 
+// FakeStreamDecisionScope selects which candidate's channel policy decides
+// whether the downstream placeholder is committed before upstream TTFT.
+type FakeStreamDecisionScope string
+
+const (
+	FakeStreamDecisionScopeFirstCandidate FakeStreamDecisionScope = "first_candidate"
+	FakeStreamDecisionScopeAnyCandidate   FakeStreamDecisionScope = "any_candidate"
+)
+
+// UnmarshalText implements encoding.TextUnmarshaler so configuration loading
+// rejects unknown values instead of silently degrading to the default.
+func (s *FakeStreamDecisionScope) UnmarshalText(text []byte) error {
+	switch v := strings.TrimSpace(string(text)); v {
+	case "", string(FakeStreamDecisionScopeFirstCandidate):
+		*s = FakeStreamDecisionScopeFirstCandidate
+	case string(FakeStreamDecisionScopeAnyCandidate):
+		*s = FakeStreamDecisionScopeAnyCandidate
+	default:
+		return fmt.Errorf("invalid fake stream decision scope: %q (use first_candidate or any_candidate)", v)
+	}
+	return nil
+}
+
 type APIKeyAutoDisableMode string
 
 const (

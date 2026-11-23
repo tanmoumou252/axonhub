@@ -10,6 +10,7 @@ import (
 
 	"github.com/looplj/axonhub/internal/contexts"
 	entprivacy "github.com/looplj/axonhub/internal/ent/privacy"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
 	"github.com/looplj/axonhub/internal/server/plugin"
@@ -36,8 +37,9 @@ type AnthropicHandlersParams struct {
 	ProviderQuotaStatusProvider orchestrator.ProviderQuotaStatusProvider
 	PluginManager               *plugin.Manager
 	SSEKeepAliveConfig          SSEKeepAliveConfig
-	SafeguardsConfig            safeguards.Config `optional:"true"`
-	FakeStreamEnabled           FakeStreamEnabled `optional:"true"`
+	SafeguardsConfig            safeguards.Config               `optional:"true"`
+	FakeStreamEnabled           FakeStreamEnabled               `optional:"true"`
+	FakeStreamDecisionScope     objects.FakeStreamDecisionScope `optional:"true"`
 }
 
 type AnthropicHandlers struct {
@@ -67,6 +69,7 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 				orchestratorPlugins(params.PluginManager)),
 			sseKeepAlive:             params.SSEKeepAliveConfig,
 			fakeStreamEnabled:        bool(params.FakeStreamEnabled),
+			fakeStreamScope:          params.FakeStreamDecisionScope,
 			sseHeartbeatFormat:       sseHeartbeatAnthropic,
 			streamProtocol:           StreamProtocolAnthropic,
 			safeguardsConfig:         params.SafeguardsConfig,
