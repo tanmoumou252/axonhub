@@ -80,6 +80,7 @@ func (m *performanceRecording) OnOutboundRawRequest(ctx context.Context, request
 	perf := biz.PerformanceRecord{}
 	perf.StartTime = time.Now()
 	perf.ChannelID = channel.ID
+	perf.ModelID = m.outbound.GetCurrentModelID()
 	perf.Success = false
 	perf.RequestCompleted = false
 	perf.Stream = streamFlag
@@ -155,6 +156,12 @@ func (m *performanceRecording) OnOutboundRawError(ctx context.Context, err error
 	} else {
 		errorCode := ExtractErrorCode(err)
 		perf.MarkFailedWithMessage(errorCode, extractErrorMessageForMatching(err))
+		// Route load-balancing failure counters by retry granularity; the zero
+		// value (model-scoped) is the correct default for stream terminal
+		// failures that bypass this hook.
+		if m.outbound.ErrorScopeFor(err) == errorScopeChannel {
+			perf.FailureScope = biz.FailureScopeChannel
+		}
 	}
 
 	m.outbound.state.ChannelService.AsyncRecordPerformance(ctx, perf)

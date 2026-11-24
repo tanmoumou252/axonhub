@@ -108,6 +108,13 @@ type channelMetricsResult struct {
 	LastSelectedAt      *time.Time `json:"last_selected_at"`
 	LastFailureAt       *time.Time `json:"last_failure_at"`
 	Slots               []*timeSlotMetrics
+
+	// Scoped recovery mirrors the scope-routed live counters. The failure scope
+	// is not persisted; channelScopedRecoveryCode approximates it from the
+	// response status code.
+	ScopedConsecutiveFailures int64
+	ScopedLastFailureAt       *time.Time
+	ModelStats                map[string]*ModelMetrics
 }
 
 // channelMetricExecution contains only the fields needed to restore metrics.
@@ -115,20 +122,25 @@ type channelMetricsResult struct {
 type channelMetricExecution struct {
 	ID          int
 	ChannelID   int
+	ModelID     string
 	Status      requestexecution.Status
 	SelectedAt  time.Time
 	CompletedAt time.Time
+	// ResponseStatusCode is 0 when not persisted; 0 recovers as model-scoped.
+	ResponseStatusCode int
 }
 
 // scanChannelMetricExecutions reads executions created within the window in
 // bounded batches. Recent updates do not bring older executions into recovery.
 func scanChannelMetricExecutions(ctx context.Context, client *ent.Client, since time.Time, statuses []requestexecution.Status, visit func(channelMetricExecution)) error {
 	type queryResult struct {
-		ID        int    `json:"id"`
-		ChannelID int    `json:"channel_id"`
-		Status    string `json:"status"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
+		ID                 int    `json:"id"`
+		ChannelID          int    `json:"channel_id"`
+		ModelID            string `json:"model_id"`
+		Status             string `json:"status"`
+		CreatedAt          string `json:"created_at"`
+		UpdatedAt          string `json:"updated_at"`
+		ResponseStatusCode *int   `json:"response_status_code"`
 	}
 
 	afterID := 0
@@ -144,6 +156,7 @@ func scanChannelMetricExecutions(ctx context.Context, client *ent.Client, since 
 			Order(ent.Asc(requestexecution.FieldID)).
 			Limit(channelMetricsLoadBatchSize).
 			Select(requestexecution.FieldID, requestexecution.FieldChannelID,
+				requestexecution.FieldModelID, requestexecution.FieldResponseStatusCode,
 				requestexecution.FieldStatus, requestexecution.FieldCreatedAt, requestexecution.FieldUpdatedAt).
 			Scan(ctx, &results)
 		if err != nil {
@@ -163,8 +176,9 @@ func scanChannelMetricExecutions(ctx context.Context, client *ent.Client, since 
 				continue
 			}
 			visit(channelMetricExecution{
-				ID: r.ID, ChannelID: r.ChannelID, Status: requestexecution.Status(r.Status),
+				ID: r.ID, ChannelID: r.ChannelID, ModelID: r.ModelID, Status: requestexecution.Status(r.Status),
 				SelectedAt: selectedAt, CompletedAt: completedAt,
+				ResponseStatusCode: derefInt(r.ResponseStatusCode),
 			})
 		}
 		if len(results) < channelMetricsLoadBatchSize {
@@ -182,6 +196,7 @@ func (svc *ChannelService) loadAllChannelMetricsFromExecutions(ctx context.Conte
 	metricsMap := make(map[int]*channelMetricsResult)
 	slotsByChannel := make(map[int]map[int64]*timeSlotMetrics)
 	lastSuccess := make(map[int]channelMetricExecution)
+	lastModelSuccess := make(map[ChannelModelKey]channelMetricExecution)
 	getSlot := func(channelID int, at time.Time) *timeSlotMetrics {
 		ts := at.Unix()
 		slot := slotsByChannel[channelID][ts]
@@ -218,10 +233,20 @@ func (svc *ChannelService) loadAllChannelMetricsFromExecutions(ctx context.Conte
 			if previous, ok := lastSuccess[r.ChannelID]; !ok || after(r, previous) {
 				lastSuccess[r.ChannelID] = r
 			}
+			if r.ModelID != "" {
+				key := ChannelModelKey{ChannelID: r.ChannelID, ModelID: r.ModelID}
+				if previous, ok := lastModelSuccess[key]; !ok || after(r, previous) {
+					lastModelSuccess[key] = r
+				}
+			}
 		case requestexecution.StatusFailed:
 			getSlot(r.ChannelID, r.CompletedAt).FailureCount++
 			if m.LastFailureAt == nil || r.CompletedAt.After(*m.LastFailureAt) {
 				m.LastFailureAt = &r.CompletedAt
+			}
+			if channelScopedRecoveryCode(r.ResponseStatusCode) &&
+				(m.ScopedLastFailureAt == nil || r.CompletedAt.After(*m.ScopedLastFailureAt)) {
+				m.ScopedLastFailureAt = &r.CompletedAt
 			}
 		}
 	})
@@ -238,6 +263,37 @@ func (svc *ChannelService) loadAllChannelMetricsFromExecutions(ctx context.Conte
 		}
 		if success, ok := lastSuccess[r.ChannelID]; !ok || after(r, success) {
 			m.ConsecutiveFailures++
+			// Channel-scoped failures recover into the channel term; everything
+			// else (including unclassified rows) recovers as model-scoped.
+			if channelScopedRecoveryCode(r.ResponseStatusCode) {
+				m.ScopedConsecutiveFailures++
+			}
+		}
+		// Channel-scoped failures never enter model entries (mirrors the live
+		// recordFailure early return); the rest recovers as model-scoped.
+		if r.ModelID == "" || channelScopedRecoveryCode(r.ResponseStatusCode) {
+			return
+		}
+		key := ChannelModelKey{ChannelID: r.ChannelID, ModelID: r.ModelID}
+		if ms, ok := lastModelSuccess[key]; ok && !after(r, ms) {
+			return
+		}
+		entry := m.ModelStats[r.ModelID]
+		if entry == nil {
+			// Mirror the live recordFailure cardinality guard: keep counting
+			// known models but refuse unbounded new entries during recovery.
+			if len(m.ModelStats) >= maxModelStatsEntries {
+				return
+			}
+			if m.ModelStats == nil {
+				m.ModelStats = make(map[string]*ModelMetrics)
+			}
+			entry = &ModelMetrics{}
+			m.ModelStats[r.ModelID] = entry
+		}
+		entry.ConsecutiveFailures++
+		if entry.LastFailureAt == nil || r.CompletedAt.After(*entry.LastFailureAt) {
+			entry.LastFailureAt = &r.CompletedAt
 		}
 	})
 	if err != nil {
@@ -304,11 +360,19 @@ func (svc *ChannelService) populateChannelMetrics(cm *channelMetrics, m *channel
 
 	cm.aggregatedMetrics.LastSelectedAt = m.LastSelectedAt
 	cm.aggregatedMetrics.ConsecutiveFailures = m.ConsecutiveFailures
+	cm.aggregatedMetrics.ScopedConsecutiveFailures = m.ScopedConsecutiveFailures
 
 	if m.LastFailureAt != nil {
 		cm.aggregatedMetrics.LastFailureAt = m.LastFailureAt
 	}
 
+	if m.ScopedLastFailureAt != nil {
+		cm.aggregatedMetrics.ScopedLastFailureAt = m.ScopedLastFailureAt
+	}
+
+	if len(m.ModelStats) > 0 {
+		cm.aggregatedMetrics.ModelStats = m.ModelStats
+	}
 }
 
 // timeSlotMetrics holds metrics for a specific second.
@@ -328,12 +392,68 @@ type metricsRecord struct {
 	ConsecutiveFailures int64
 }
 
+// maxModelStatsEntries caps per-channel model health entries so arbitrarily many
+// distinct model IDs cannot grow the map unbounded.
+const maxModelStatsEntries = 512
+
+// ModelMetrics holds consecutive-failure health for one (channel, model) pair.
+type ModelMetrics struct {
+	ConsecutiveFailures int64
+	LastFailureAt       *time.Time
+}
+
+// FailureScope classifies a failed PerformanceRecord by retry granularity,
+// mirroring the orchestrator's errorScope classification.
+type FailureScope uint8
+
+const (
+	// FailureScopeModel is the zero value: a failure of the current
+	// (channel, model) attempt (timeouts, 5xx, EOF, opted-in rate limits).
+	FailureScopeModel FailureScope = iota
+	// FailureScopeChannel is a failure of the channel as a whole
+	// (401/402/403/520 and non-opted-in 429).
+	FailureScopeChannel
+)
+
+// channelScopedRecoveryCode approximates the failure scope of a persisted
+// execution from its response status code, used only by startup recovery
+// because the failure scope itself is not persisted. It mirrors the narrow
+// channel-fatal set; 429 is approximated as model-scoped regardless of
+// per-channel RetryableStatusCodes opt-ins (bounded by the 5-minute cooldown).
+func channelScopedRecoveryCode(code int) bool {
+	switch code {
+	case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden, 520:
+		return true
+	}
+
+	return false
+}
+
+func derefInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+
+	return *v
+}
+
 // AggregatedMetrics holds accumulated metrics for the flush period.
 type AggregatedMetrics struct {
 	metricsRecord
 
 	LastSelectedAt *time.Time
 	LastFailureAt  *time.Time
+
+	// ScopedConsecutiveFailures counts consecutive channel-scoped failures only
+	// (401/402/403/520 and non-opted-in 429). ConsecutiveFailures above keeps
+	// counting every failure for legacy consumers.
+	ScopedConsecutiveFailures int64
+	// ScopedLastFailureAt is the completion time of the latest channel-scoped failure.
+	ScopedLastFailureAt *time.Time
+	// ModelStats holds per-(channel, model) consecutive failures keyed by actual
+	// model ID. Entries are deleted when the model succeeds; scoring ignores
+	// failures older than the strategy cooldown.
+	ModelStats map[string]*ModelMetrics
 
 	// StreamingFirstTokenLatencyEWMA is the EWMA of first-token latency for streaming requests.
 	StreamingFirstTokenLatencyEWMA float64
@@ -348,16 +468,32 @@ type AggregatedMetrics struct {
 }
 
 func (m *AggregatedMetrics) Clone() *AggregatedMetrics {
-	return &AggregatedMetrics{
+	clone := &AggregatedMetrics{
 		metricsRecord:                  m.metricsRecord,
 		LastSelectedAt:                 m.LastSelectedAt,
 		LastFailureAt:                  m.LastFailureAt,
+		ScopedConsecutiveFailures:      m.ScopedConsecutiveFailures,
+		ScopedLastFailureAt:            m.ScopedLastFailureAt,
 		StreamingFirstTokenLatencyEWMA: m.StreamingFirstTokenLatencyEWMA,
 		StreamingTokensPerSecondEWMA:   m.StreamingTokensPerSecondEWMA,
 		StreamingSampleCount:           m.StreamingSampleCount,
 		NonStreamingLatencyEWMA:        m.NonStreamingLatencyEWMA,
 		NonStreamingSampleCount:        m.NonStreamingSampleCount,
 	}
+
+	if len(m.ModelStats) > 0 {
+		clone.ModelStats = make(map[string]*ModelMetrics, len(m.ModelStats))
+		for model, stats := range m.ModelStats {
+			entry := &ModelMetrics{ConsecutiveFailures: stats.ConsecutiveFailures}
+			if stats.LastFailureAt != nil {
+				ts := *stats.LastFailureAt
+				entry.LastFailureAt = &ts
+			}
+			clone.ModelStats[model] = entry
+		}
+	}
+
+	return clone
 }
 
 // newChannelMetrics creates a new channelMetrics instance.
@@ -424,6 +560,16 @@ func (cm *channelMetrics) recordSuccess(slot *timeSlotMetrics, perf *Performance
 	// Reset consecutive failures on success
 	cm.aggregatedMetrics.ConsecutiveFailures = 0
 
+	// Any success proves the channel serves again: clear the channel-scope term.
+	// ScopedLastFailureAt is kept so the recent-failure penalty decays naturally.
+	cm.aggregatedMetrics.ScopedConsecutiveFailures = 0
+
+	// Drop the model entry so the per-model map stays bounded; a fresh failure
+	// recreates it.
+	if perf.ModelID != "" {
+		delete(cm.aggregatedMetrics.ModelStats, perf.ModelID)
+	}
+
 	firstTokenLatencyMs, requestLatencyMs, tokensPerSecond := perf.Calculate()
 
 	if perf.Stream && perf.FirstTokenTime != nil {
@@ -467,6 +613,45 @@ func (cm *channelMetrics) recordFailure(slot *timeSlotMetrics, perf *Performance
 
 	// Increment consecutive failures
 	cm.aggregatedMetrics.ConsecutiveFailures++
+
+	// Scope-routed counters for load-balancing penalties: channel-scoped
+	// failures drive the channel term, model-scoped failures drive the
+	// (channel, model) term. The legacy counters above stay untouched.
+	if perf.FailureScope == FailureScopeChannel {
+		cm.aggregatedMetrics.ScopedConsecutiveFailures++
+		if cm.aggregatedMetrics.ScopedLastFailureAt == nil || cm.aggregatedMetrics.ScopedLastFailureAt.Before(perf.EndTime) {
+			cm.aggregatedMetrics.ScopedLastFailureAt = &perf.EndTime
+		}
+		return
+	}
+
+	// A model-scoped failure without a model attribution degrades to the
+	// channel counter so the penalty signal is never lost.
+	if perf.ModelID == "" {
+		cm.aggregatedMetrics.ScopedConsecutiveFailures++
+		if cm.aggregatedMetrics.ScopedLastFailureAt == nil || cm.aggregatedMetrics.ScopedLastFailureAt.Before(perf.EndTime) {
+			cm.aggregatedMetrics.ScopedLastFailureAt = &perf.EndTime
+		}
+		return
+	}
+
+	stats := cm.aggregatedMetrics.ModelStats[perf.ModelID]
+	if stats == nil {
+		// Cardinality guard: existing models keep being counted, but new ones
+		// beyond the cap are not tracked for model-level penalties.
+		if len(cm.aggregatedMetrics.ModelStats) >= maxModelStatsEntries {
+			return
+		}
+		if cm.aggregatedMetrics.ModelStats == nil {
+			cm.aggregatedMetrics.ModelStats = make(map[string]*ModelMetrics)
+		}
+		stats = &ModelMetrics{}
+		cm.aggregatedMetrics.ModelStats[perf.ModelID] = stats
+	}
+	stats.ConsecutiveFailures++
+	if stats.LastFailureAt == nil || stats.LastFailureAt.Before(perf.EndTime) {
+		stats.LastFailureAt = &perf.EndTime
+	}
 }
 
 // getOrCreateTimeSlot returns nil for timestamps that have already expired.
@@ -671,7 +856,12 @@ func deriveErrorMessage(errorCode int) string {
 
 // PerformanceRecord contains performance metrics collected during request processing.
 type PerformanceRecord struct {
-	ChannelID          int
+	ChannelID int
+	// ModelID is the actual model ID of the attempt; empty when unavailable.
+	ModelID string
+	// FailureScope classifies the failure for load-balancing counters; the zero
+	// value is model-scoped. Canceled records never reach the counters.
+	FailureScope FailureScope
 	APIKey             string // API key used for the request (sensitive, do not log full value)
 	StartTime          time.Time
 	FirstTokenTime     *time.Time

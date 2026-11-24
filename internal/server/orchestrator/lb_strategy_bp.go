@@ -44,38 +44,42 @@ func NewErrorAwareStrategy() *ErrorAwareStrategy {
 
 // Score returns a health score based on recent errors.
 // Production path without debug logging.
-func (s *ErrorAwareStrategy) Score(_ context.Context, _ *biz.Channel, metrics *biz.AggregatedMetrics) float64 {
+//
+// Penalties are scope-routed: the channel term is driven only by channel-scoped
+// failures (ScopedConsecutiveFailures/ScopedLastFailureAt) and the model term
+// only by the candidate model's entry in ModelStats (model ID comes from the
+// scoring context, mirroring ModelAwareCircuitBreakerStrategy). The legacy
+// ConsecutiveFailures keeps counting every failure for other consumers and is
+// deliberately ignored here, so one failing model cannot drag down its
+// siblings on the same channel.
+func (s *ErrorAwareStrategy) Score(ctx context.Context, _ *biz.Channel, metrics *biz.AggregatedMetrics) float64 {
 	if metrics == nil {
 		// If we can't get metrics, give neutral score
 		return s.maxScore / 2
 	}
 
+	score, _ := s.computeScore(ctx, metrics)
+
+	return score
+}
+
+// computeScore applies the scope-routed penalties and returns the clamped score
+// plus debug details shared by Score and ScoreWithDebug.
+func (s *ErrorAwareStrategy) computeScore(ctx context.Context, metrics *biz.AggregatedMetrics) (float64, map[string]any) {
 	score := s.maxScore
+	details := map[string]any{}
 
-	// Calculate time-based decay factor if there was a recent failure
-	// This ensures penalties (including consecutive failures) eventually decay to zero,
-	// allowing the channel to recover and avoiding permanent deadlock.
-	cooldownRatio := 0.0
-	if metrics.LastFailureAt != nil {
-		timeSinceFailure := time.Since(*metrics.LastFailureAt)
-		if timeSinceFailure < time.Duration(s.errorCooldownMinutes)*time.Minute {
-			cooldownRatio = 1.0 - (timeSinceFailure.Minutes() / float64(s.errorCooldownMinutes))
+	// Channel term: only channel-scoped failures penalize every candidate.
+	score -= s.penaltyFor(metrics.ScopedConsecutiveFailures, metrics.ScopedLastFailureAt)
+
+	// Model term: only the candidate model's own failures penalize it.
+	modelID := attemptActualModelFromContext(ctx)
+	if modelID != "" && metrics.ModelStats != nil {
+		if entry := metrics.ModelStats[modelID]; entry != nil {
+			score -= s.penaltyFor(entry.ConsecutiveFailures, entry.LastFailureAt)
+			details["model_id"] = modelID
+			details["model_consecutive_failures"] = entry.ConsecutiveFailures
 		}
-	} else if metrics.ConsecutiveFailures > 0 {
-		// Fallback: if we have consecutive failures but no timestamp, assume it just happened
-		cooldownRatio = 1.0
-	}
-
-	// Penalize for consecutive failures with time-based decay
-	if metrics.ConsecutiveFailures > 0 && cooldownRatio > 0 {
-		penalty := float64(metrics.ConsecutiveFailures) * s.penaltyPerConsecutiveFailure * cooldownRatio
-		score -= penalty
-	}
-
-	// Apply recent failure penalty (also time-based)
-	if cooldownRatio > 0 {
-		penalty := s.basePenalty * cooldownRatio
-		score -= penalty
 	}
 
 	// Ensure score doesn't go below 0
@@ -83,7 +87,31 @@ func (s *ErrorAwareStrategy) Score(_ context.Context, _ *biz.Channel, metrics *b
 		score = 0
 	}
 
-	return score
+	return score, details
+}
+
+// penaltyFor applies the consecutive-failure and recent-failure penalties with
+// linear decay over the cooldown period.
+func (s *ErrorAwareStrategy) penaltyFor(consecutiveFailures int64, lastFailureAt *time.Time) float64 {
+	cooldownRatio := 0.0
+	if lastFailureAt != nil {
+		timeSinceFailure := time.Since(*lastFailureAt)
+		if timeSinceFailure < time.Duration(s.errorCooldownMinutes)*time.Minute {
+			cooldownRatio = 1.0 - (timeSinceFailure.Minutes() / float64(s.errorCooldownMinutes))
+		}
+	} else if consecutiveFailures > 0 {
+		// Fallback: failures without a timestamp are assumed to have just happened.
+		cooldownRatio = 1.0
+	}
+
+	if cooldownRatio <= 0 {
+		return 0
+	}
+
+	penalty := float64(consecutiveFailures) * s.penaltyPerConsecutiveFailure * cooldownRatio
+	penalty += s.basePenalty * cooldownRatio
+
+	return penalty
 }
 
 // ScoreWithDebug returns a health score with detailed debug information.
@@ -107,75 +135,9 @@ func (s *ErrorAwareStrategy) ScoreWithDebug(ctx context.Context, channel *biz.Ch
 		}
 	}
 
-	score := s.maxScore
-	details := map[string]any{
-		"consecutive_failures": metrics.ConsecutiveFailures,
-		"request_count":        metrics.RequestCount,
-	}
-
-	// Calculate time-based decay factor if there was a recent failure
-	// This ensures penalties (including consecutive failures) eventually decay to zero,
-	// allowing the channel to recover and avoiding permanent deadlock.
-	cooldownRatio := 0.0
-
-	var timeSinceFailure time.Duration
-	if metrics.LastFailureAt != nil {
-		timeSinceFailure = time.Since(*metrics.LastFailureAt)
-		if timeSinceFailure < time.Duration(s.errorCooldownMinutes)*time.Minute {
-			cooldownRatio = 1.0 - (timeSinceFailure.Minutes() / float64(s.errorCooldownMinutes))
-		}
-	} else if metrics.ConsecutiveFailures > 0 {
-		// Fallback: if we have consecutive failures but no timestamp, assume it just happened
-		cooldownRatio = 1.0
-	}
-
-	// Penalize for consecutive failures with time-based decay
-	if metrics.ConsecutiveFailures > 0 && cooldownRatio > 0 {
-		penalty := float64(metrics.ConsecutiveFailures) * s.penaltyPerConsecutiveFailure * cooldownRatio
-		score -= penalty
-		details["consecutive_failures_penalty"] = penalty
-		log.Info(ctx, "ErrorAwareStrategy: applying consecutive failures penalty (with decay)",
-			log.Int("channel_id", channel.ID),
-			log.String("channel_name", channel.Name),
-			log.Int64("consecutive_failures", metrics.ConsecutiveFailures),
-			log.Float64("penalty", penalty),
-			log.Float64("decay_ratio", cooldownRatio),
-		)
-	}
-
-	// Apply recent failure penalty (also time-based)
-	if cooldownRatio > 0 {
-		penalty := s.basePenalty * cooldownRatio
-		score -= penalty
-		details["recent_failure_penalty"] = penalty
-
-		details["decay_ratio"] = cooldownRatio
-		if metrics.LastFailureAt != nil {
-			details["time_since_failure_minutes"] = timeSinceFailure.Minutes()
-			log.Info(ctx, "ErrorAwareStrategy: applying recent failure penalty",
-				log.Int("channel_id", channel.ID),
-				log.String("channel_name", channel.Name),
-				log.Duration("time_since_failure", timeSinceFailure),
-				log.Float64("penalty", penalty),
-			)
-		}
-	} else if metrics.LastFailureAt != nil {
-		log.Info(ctx, "ErrorAwareStrategy: failure outside cooldown period",
-			log.Int("channel_id", channel.ID),
-			log.String("channel_name", channel.Name),
-			log.Duration("time_since_failure", timeSinceFailure),
-		)
-	}
-
-	// Ensure score doesn't go below 0
-	if score < 0 {
-		log.Info(ctx, "ErrorAwareStrategy: score clamped to 0",
-			log.Int("channel_id", channel.ID),
-			log.String("channel_name", channel.Name),
-			log.Float64("original_score", score),
-		)
-		score = 0
-	}
+	score, details := s.computeScore(ctx, metrics)
+	details["scoped_consecutive_failures"] = metrics.ScopedConsecutiveFailures
+	details["request_count"] = metrics.RequestCount
 
 	log.Info(ctx, "ErrorAwareStrategy: calculated final score",
 		log.Int("channel_id", channel.ID),

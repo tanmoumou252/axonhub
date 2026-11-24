@@ -38,9 +38,9 @@ func TestErrorAwareStrategy_Score_NoMetrics(t *testing.T) {
 func TestErrorAwareStrategy_Score_WithConsecutiveFailures(t *testing.T) {
 	ctx := context.Background()
 
-	// 3 consecutive failures
+	// 3 channel-scoped consecutive failures
 	metrics := &biz.AggregatedMetrics{}
-	metrics.ConsecutiveFailures = 3
+	metrics.ScopedConsecutiveFailures = 3
 
 	strategy := NewErrorAwareStrategy()
 
@@ -51,6 +51,25 @@ func TestErrorAwareStrategy_Score_WithConsecutiveFailures(t *testing.T) {
 	score := strategy.Score(ctx, channel, metrics)
 	// Base 200 - 40 - (3 * 30) = 70
 	assert.Equal(t, 70.0, score)
+}
+
+// Legacy consecutive failures keep counting every failure for other consumers,
+// but ErrorAware deliberately ignores them: model-level noise must not
+// penalize candidates through the channel term.
+func TestErrorAwareStrategy_Score_IgnoresLegacyConsecutiveFailures(t *testing.T) {
+	ctx := context.Background()
+
+	metrics := &biz.AggregatedMetrics{}
+	metrics.ConsecutiveFailures = 3
+
+	strategy := NewErrorAwareStrategy()
+
+	channel := &biz.Channel{
+		Channel: &ent.Channel{ID: 1, Name: "test"},
+	}
+
+	score := strategy.Score(ctx, channel, metrics)
+	assert.Equal(t, 200.0, score)
 }
 
 func TestErrorAwareStrategy_Score_WithRecentSuccess(t *testing.T) {
@@ -181,24 +200,24 @@ func TestErrorAwareStrategy_ScoreConsistency(t *testing.T) {
 			}(),
 		},
 		{
-			name: "consecutive failures",
+			name: "scoped consecutive failures",
 			metrics: func() *biz.AggregatedMetrics {
 				m := &biz.AggregatedMetrics{}
-				m.ConsecutiveFailures = 3
+				m.ScopedConsecutiveFailures = 3
 
 				return m
 			}(),
 		},
 		{
-			name: "recent failure",
+			name: "recent scoped failure",
 			metrics: &biz.AggregatedMetrics{
-				LastFailureAt: &recentFailure,
+				ScopedLastFailureAt: &recentFailure,
 			},
 		},
 		{
-			name: "old failure",
+			name: "old scoped failure",
 			metrics: &biz.AggregatedMetrics{
-				LastFailureAt: &oldFailure,
+				ScopedLastFailureAt: &oldFailure,
 			},
 		},
 		{
@@ -211,8 +230,8 @@ func TestErrorAwareStrategy_ScoreConsistency(t *testing.T) {
 			name: "complex scenario",
 			metrics: func() *biz.AggregatedMetrics {
 				m := &biz.AggregatedMetrics{}
-				m.ConsecutiveFailures = 2
-				m.LastFailureAt = &recentFailure
+				m.ScopedConsecutiveFailures = 2
+				m.ScopedLastFailureAt = &recentFailure
 				m.LastSelectedAt = &recentSuccess
 				m.RequestCount = 15
 				m.SuccessCount = 10

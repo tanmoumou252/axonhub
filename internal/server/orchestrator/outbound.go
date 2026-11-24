@@ -344,6 +344,9 @@ func (ts *OutboundPersistentStream) markPerformanceTerminal(state streamTerminal
 	case streamTerminalCanceled:
 		ts.perf.MarkCanceled()
 	case streamTerminalFailed:
+		// Stream terminal failures stay model-scoped: PerformanceRecord's zero
+		// FailureScope value is FailureScopeModel, so load-balancing counters
+		// attribute them to the current (channel, model) attempt, not the channel.
 		ts.perf.MarkFailedWithMessage(500, message)
 	case streamTerminalNone:
 	}

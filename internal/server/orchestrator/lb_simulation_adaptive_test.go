@@ -104,13 +104,15 @@ func (f *fakeAdaptiveMetricsProvider) GetChannelMetrics(_ context.Context, chann
 	}
 
 	m := &biz.AggregatedMetrics{
-		LastSelectedAt: lastSuccessAt,
-		LastFailureAt:  lastFailureAt,
+		LastSelectedAt:      lastSuccessAt,
+		LastFailureAt:       lastFailureAt,
+		ScopedLastFailureAt: lastFailureAt,
 	}
 	m.RequestCount = ch.requestCount
 	m.SuccessCount = ch.successCount
 	m.FailureCount = ch.failureCount
 	m.ConsecutiveFailures = ch.consecutiveFailure
+	m.ScopedConsecutiveFailures = ch.consecutiveFailure
 
 	return m, nil
 }
@@ -293,8 +295,8 @@ func TestAdaptiveLoadBalancer_DefaultWeightsRespectHealthAndLatency(t *testing.T
 			name: "healthy channel outranks a recent failure",
 			configure: func(metrics *biz.AggregatedMetrics) {
 				now := time.Now()
-				metrics.LastFailureAt = &now
-				metrics.ConsecutiveFailures = 1
+				metrics.ScopedLastFailureAt = &now
+				metrics.ScopedConsecutiveFailures = 1
 			},
 		},
 		{
