@@ -500,7 +500,7 @@ func (c *Channel) ForcedAPIFormats(model string) []string {
 // first match wins. An empty FakeStream — or a value outside the off/placeholder/
 // fake_stream enum (possible only via hand-edited DB JSON, since the GraphQL enum
 // blocks the API path) — means "inherit the channel policy" and reports found=false,
-// so a garbage value never silently disables fake streaming (contract P1 退化语义).
+// so a garbage value never silently disables fake streaming.
 func (c *Channel) ModelFakeStreamOverride(model string) (objects.FakeStreamMode, bool) {
 	if c == nil || c.Channel == nil || c.Settings == nil || model == "" {
 		return "", false

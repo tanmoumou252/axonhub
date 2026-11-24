@@ -274,6 +274,13 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 		EventBus:              processor.EventBus,
 	}
 
+	// Capture the per-request master-switch marker from the context: the handler
+	// registers a fake-stream decision callback only when the global switch is on
+	// and the route is eligible. Absent that callback the marker stays false and
+	// no Mode B behaviour is reachable for this request.
+	_, fakeStreamHandler := fakeStreamDecisionFrom(ctx)
+	state.FakeStreamHandlerEnabled = fakeStreamHandler
+
 	var pipelineOpts []pipeline.Option
 
 	// Only apply retry if policy is enabled

@@ -285,6 +285,7 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
     setModelProtocols(getInitialModelProtocols(channel));
     setNewProtocolModel('');
     setNewProtocolFormats([]);
+    setNewProtocolFakeStream('inherit');
     setEditingProtocolModel(null);
     setBlockedEndpointRemoval(null);
     setError(null);
@@ -474,6 +475,7 @@ export function ChannelsEndpointsDialog({ channel, open, onOpenChange }: Props) 
       setEditingProtocolModel(null);
       setNewProtocolModel('');
       setNewProtocolFormats([]);
+      setNewProtocolFakeStream('inherit');
     }
     setError(null);
   }, [editingProtocolModel]);

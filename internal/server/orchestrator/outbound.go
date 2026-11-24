@@ -576,6 +576,9 @@ type PersistentOutboundTransformer struct {
 // FakeStreamMode translates the current candidate's channel policy to the
 // pipeline enum. It implements pipeline.FakeStreamPolicy.
 func (p *PersistentOutboundTransformer) FakeStreamMode() pipeline.FakeStreamMode {
+	if p.state == nil || !p.state.FakeStreamHandlerEnabled {
+		return pipeline.FakeStreamModeOff
+	}
 	mode := effectiveFakeStreamMode(p.state.CurrentCandidate, p.state.CurrentModelIndex)
 	switch mode {
 	case objects.FakeStreamModePlaceholder:
@@ -765,8 +768,12 @@ func (p *PersistentOutboundTransformer) TransformRequest(ctx context.Context, ll
 	// Mode B: the selected candidate synthesizes a downstream stream from a
 	// complete upstream response, so the upstream request must be non-streaming.
 	// This runs after require/forbid forcing because the candidate has already
-	// passed those filters; it only rewrites the outbound attempt (E-A2).
-	if effectiveFakeStreamMode(candidate, p.state.CurrentModelIndex) == objects.FakeStreamModeFake && supportsAutoAggregateRequest(llmRequest) {
+	// passed those filters; it only rewrites the outbound attempt.
+	// The per-request master-switch marker gates it: with the global switch off
+	// or an ineligible route, no upstream stream rewrite fires.
+	if p.state.FakeStreamHandlerEnabled &&
+		effectiveFakeStreamMode(candidate, p.state.CurrentModelIndex) == objects.FakeStreamModeFake &&
+		supportsAutoAggregateRequest(llmRequest) {
 		llmRequest.Stream = lo.ToPtr(false)
 		if p.state != nil && p.state.LlmRequest != nil {
 			p.state.LlmRequest.Stream = llmRequest.Stream
@@ -1055,6 +1062,19 @@ func (p *PersistentOutboundTransformer) CanRetry(err error) bool {
 		return false
 	}
 
+	// Channel-level fatal errors (invalid key, frozen account, dead edge,
+	// non-opted-in rate limit, channel left service) cannot be resolved by
+	// iterating sibling models on the same channel, so switch immediately.
+	// The classifier is the single source for retry granularity; model-level
+	// errors fall through to the empty-response and sibling branches below.
+	if p.ErrorScopeFor(err) == errorScopeChannel {
+		log.Debug(context.Background(), "channel-level failure, skipping same-channel retry to switch to next channel",
+			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
+		)
+
+		return false
+	}
+
 	// Empty response detection: allow same-channel retry so the pipeline can
 	// re-execute the request against the same (or next model in the) channel.
 	if errors.Is(err, pipeline.ErrEmptyResponse) ||
@@ -1065,51 +1085,6 @@ func (p *PersistentOutboundTransformer) CanRetry(err error) bool {
 		)
 
 		return true
-	}
-
-	// 429 Too Many Requests: skip same-channel retry and switch channels.
-	// The upstream is explicitly rate-limiting this channel, so retrying the same
-	// channel would just burn a retry attempt without any chance of success.
-	// Instead, force a channel switch so the next candidate (e.g. a backup channel)
-	// is tried immediately. The load balancer (e.g. ErrorAware strategy) will
-	// deprioritize this channel for subsequent requests and it will naturally
-	// recover as the rate-limit window resets.
-	//
-	// A channel that lists 429 in RetryableStatusCodes opts out: for that channel
-	// the code means "the upstream endpoint is busy", where a same-channel retry
-	// can win the race, so the error falls through to the per-channel check below.
-	if (httpclient.IsRateLimitErr(err) || ExtractStatusCodeFromError(err) == http.StatusTooManyRequests) &&
-		!channelRetriesOn429(p.state.CurrentCandidate.Channel) {
-		log.Debug(context.Background(), "429 rate limit, skipping same-channel retry to switch to next channel",
-			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
-		)
-
-		return false
-	}
-
-	// 520 Unknown Error (typically a Cloudflare edge failure with an empty
-	// body): the whole backend edge is unresponsive, so iterating model aliases
-	// on the same channel just burns attempts without any chance of success.
-	// Force a channel switch instead of grinding through the candidate's model
-	// list on a dead backend.
-	if ExtractStatusCodeFromError(err) == 520 {
-		log.Debug(context.Background(), "520 edge error, skipping same-channel retry to switch to next channel",
-			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
-		)
-
-		return false
-	}
-
-	// 402 Payment Required (e.g. Cline credit balance exhausted): the account
-	// behind this channel cannot serve any model, so iterating model aliases
-	// on the same channel just burns attempts. Force a channel switch so a
-	// backup channel with a funded account is tried immediately.
-	if ExtractStatusCodeFromError(err) == http.StatusPaymentRequired {
-		log.Debug(context.Background(), "402 payment required, skipping same-channel retry to switch to next channel",
-			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
-		)
-
-		return false
 	}
 
 	// if there are more models available in the current candidate, try the next model.

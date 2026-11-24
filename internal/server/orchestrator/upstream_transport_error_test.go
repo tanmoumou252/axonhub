@@ -14,9 +14,44 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/pipeline"
 )
+
+func TestFailureReason(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "nil", err: nil, want: ""},
+		{name: "idle timeout", err: httpclient.ErrStreamIdleTimeout, want: FailureReasonUpstreamIdleTimeout},
+		{name: "idle timeout with child cancellation", err: errors.Join(httpclient.ErrStreamIdleTimeout, context.Canceled), want: FailureReasonUpstreamIdleTimeout},
+		{name: "client cancel", err: context.Canceled, want: FailureReasonClientCancel},
+		{name: "first token timeout", err: pipeline.ErrStreamFirstEventTimeout, want: FailureReasonFirstTokenTimeout},
+		{name: "non stream timeout", err: pipeline.ErrNonStreamResponseTimeout, want: FailureReasonNonStreamTimeout},
+		{name: "eof", err: io.EOF, want: FailureReasonUpstreamEOF},
+		{name: "unexpected eof", err: io.ErrUnexpectedEOF, want: FailureReasonUpstreamEOF},
+		{name: "wrapped unexpected eof", err: fmt.Errorf("HTTP stream request failed: %w", io.ErrUnexpectedEOF), want: FailureReasonUpstreamEOF},
+		{name: "llm stream incomplete", err: llm.ErrStreamIncomplete, want: FailureReasonUpstreamStreamInterrupted},
+		{name: "orchestrator stream incomplete", err: ErrStreamIncomplete, want: FailureReasonUpstreamStreamInterrupted},
+		{name: "connection reset", err: syscall.ECONNRESET, want: FailureReasonUpstreamStreamInterrupted},
+		{name: "winsock reset", err: syscall.Errno(10054), want: FailureReasonUpstreamStreamInterrupted},
+		{name: "http error", err: &httpclient.Error{StatusCode: http.StatusTooManyRequests, Body: []byte(`{}`)}, want: FailureReasonUpstreamHTTPError},
+		{name: "classified error resolves through cause chain", err: ClassifyUpstreamTransportError(io.ErrUnexpectedEOF), want: FailureReasonUpstreamEOF},
+		{name: "classified winsock reset keeps interrupt reason", err: ClassifyUpstreamTransportError(&net.OpError{Op: "read", Net: "tcp", Err: &os.SyscallError{Syscall: "wsarecv", Err: syscall.Errno(10054)}}), want: FailureReasonUpstreamStreamInterrupted},
+		{name: "empty response", err: pipeline.ErrEmptyResponse, want: FailureReasonEmptyResponse},
+		{name: "plain error", err: errors.New("boom"), want: FailureReasonUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, FailureReason(tt.err))
+		})
+	}
+}
 
 func TestIsUpstreamTransportError(t *testing.T) {
 	tests := []struct {
@@ -136,4 +171,51 @@ func TestClassifyUpstreamTransportError_WinsockReset(t *testing.T) {
 	// 错误文案跨平台不同（Windows=WSA 文案，Linux=errno 数字），只锁分类器前缀。
 	require.Contains(t, respErr.Detail.Message, "closed the connection before the response completed")
 	require.True(t, errors.Is(err, cause), "the winsock cause must stay matchable through the classified error")
+}
+
+// TestPersistRequestExecutionFailureCanceledWritesReason locks the execution row
+// and the failure event onto the same coarse reason. A cancellation carries no
+// HTTP-shaped error, so without an explicit fallback the row stayed blank while
+// the event already published client_cancel.
+func TestPersistRequestExecutionFailureCanceledWritesReason(t *testing.T) {
+	ctx, client, state := newUpstreamModelPersistenceTest(t)
+
+	canceled := createUpstreamModelTestExecution(t, ctx, client, state.Request, "model", llm.APIFormatOpenAIChatCompletion, true)
+	require.NoError(t, persistRequestExecutionFailure(ctx, state.RequestService, canceled, context.Canceled, nil, "", nil))
+
+	saved, err := client.RequestExecution.Get(ctx, canceled.ID)
+	require.NoError(t, err)
+	require.Equal(t, requestexecution.StatusCanceled, saved.Status)
+	require.Equal(t, FailureReasonClientCancel, saved.FailureReason,
+		"a client cancellation must persist the same coarse reason the failure event publishes")
+	require.Empty(t, saved.ErrorCode, "a cancellation carries no classified upstream code")
+
+	httpFailed := createUpstreamModelTestExecution(t, ctx, client, state.Request, "model", llm.APIFormatOpenAIChatCompletion, true)
+	require.NoError(t, persistRequestExecutionFailure(ctx, state.RequestService, httpFailed, &httpclient.Error{StatusCode: http.StatusTooManyRequests}, nil, "", nil))
+	savedFailed, err := client.RequestExecution.Get(ctx, httpFailed.ID)
+	require.NoError(t, err)
+	require.Equal(t, requestexecution.StatusFailed, savedFailed.Status)
+	require.Equal(t, FailureReasonUpstreamHTTPError, savedFailed.FailureReason,
+		"the classified failure path must keep the shape it already had")
+
+	idle := createUpstreamModelTestExecution(t, ctx, client, state.Request, "model", llm.APIFormatOpenAIChatCompletion, true)
+	require.NoError(t, persistRequestExecutionFailure(ctx, state.RequestService, idle, fmtWrap(httpclient.ErrStreamIdleTimeout, context.Canceled), nil, "", nil))
+	savedIdle, err := client.RequestExecution.Get(ctx, idle.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, requestexecution.StatusCanceled, savedIdle.Status,
+		"an idle timeout must not be recorded as a client cancellation")
+	require.Equal(t, FailureReasonUpstreamIdleTimeout, savedIdle.FailureReason)
+
+	// Ctx-derived cancellation: the raw error is a real upstream fault with a
+	// structured shape, so the reason must stay the classified one — the
+	// client_cancel fallback applies only when nothing structured was produced.
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	viaCtx := createUpstreamModelTestExecution(t, ctx, client, state.Request, "model", llm.APIFormatOpenAIChatCompletion, true)
+	require.NoError(t, persistRequestExecutionFailure(canceledCtx, state.RequestService, viaCtx, io.ErrUnexpectedEOF, nil, "", nil))
+	savedViaCtx, err := client.RequestExecution.Get(ctx, viaCtx.ID)
+	require.NoError(t, err)
+	require.Equal(t, requestexecution.StatusCanceled, savedViaCtx.Status)
+	require.Equal(t, FailureReasonUpstreamEOF, savedViaCtx.FailureReason,
+		"a structured failure keeps its own reason even when the context was cancelled")
 }

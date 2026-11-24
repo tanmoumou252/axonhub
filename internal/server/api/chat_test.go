@@ -1443,3 +1443,50 @@ func TestWriteSSEStream_StandaloneErrorIsTerminal(t *testing.T) {
 		})
 	}
 }
+
+func TestFinishDanglingFakeStreamResult(t *testing.T) {
+	t.Run("drains a raced result and finalizes its stream", func(t *testing.T) {
+		w := newSyncResponseRecorder()
+		c, _ := gin.CreateTestContext(w)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+		h := &ChatCompletionHandlers{
+			ChatCompletionOrchestrator: &orchestrator.ChatCompletionOrchestrator{},
+			inputUsageCache:            newInputUsageCache(),
+			streamProtocol:             StreamProtocolOpenAI,
+		}
+		resultCh := make(chan fakeStreamResult, 1)
+		stream := &recordingStream{}
+		resultCh <- fakeStreamResult{result: orchestrator.ChatCompletionResult{ChatCompletionStream: stream}}
+		h.finishDanglingFakeStreamResult(c, &httpclient.Request{}, resultCh, ctx, nil, nil, time.Now())
+		require.True(t, stream.closed)
+	})
+
+	t.Run("surfaces a pre-commit deadline as an HTTP error", func(t *testing.T) {
+		w := newSyncResponseRecorder()
+		c, _ := gin.CreateTestContext(w)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		defer cancel()
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+		h := &ChatCompletionHandlers{streamProtocol: StreamProtocolOpenAI}
+		resultCh := make(chan fakeStreamResult, 1)
+		<-ctx.Done()
+		h.finishDanglingFakeStreamResult(c, &httpclient.Request{}, resultCh, ctx, nil, nil, time.Now())
+		require.NotEqual(t, http.StatusOK, w.rec.Code, "a deadline before any byte is written must not answer an empty 200")
+	})
+
+	t.Run("client disconnect without a raced result writes nothing", func(t *testing.T) {
+		w := newSyncResponseRecorder()
+		c, _ := gin.CreateTestContext(w)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+		h := &ChatCompletionHandlers{streamProtocol: StreamProtocolOpenAI}
+		resultCh := make(chan fakeStreamResult, 1)
+		cancel()
+		h.finishDanglingFakeStreamResult(c, &httpclient.Request{}, resultCh, ctx, nil, nil, time.Now())
+		require.Equal(t, http.StatusOK, w.rec.Code, "StatusOK default; nothing committed")
+		require.Empty(t, w.body())
+	})
+}

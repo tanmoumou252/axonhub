@@ -7839,6 +7839,40 @@ type RequestExecutionWhereInput struct {
 	ErrorMessageEqualFold    *string  `json:"errorMessageEqualFold,omitempty"`
 	ErrorMessageContainsFold *string  `json:"errorMessageContainsFold,omitempty"`
 
+	// "failure_reason" field predicates.
+	FailureReason             *string  `json:"failureReason,omitempty"`
+	FailureReasonNEQ          *string  `json:"failureReasonNEQ,omitempty"`
+	FailureReasonIn           []string `json:"failureReasonIn,omitempty"`
+	FailureReasonNotIn        []string `json:"failureReasonNotIn,omitempty"`
+	FailureReasonGT           *string  `json:"failureReasonGT,omitempty"`
+	FailureReasonGTE          *string  `json:"failureReasonGTE,omitempty"`
+	FailureReasonLT           *string  `json:"failureReasonLT,omitempty"`
+	FailureReasonLTE          *string  `json:"failureReasonLTE,omitempty"`
+	FailureReasonContains     *string  `json:"failureReasonContains,omitempty"`
+	FailureReasonHasPrefix    *string  `json:"failureReasonHasPrefix,omitempty"`
+	FailureReasonHasSuffix    *string  `json:"failureReasonHasSuffix,omitempty"`
+	FailureReasonIsNil        bool     `json:"failureReasonIsNil,omitempty"`
+	FailureReasonNotNil       bool     `json:"failureReasonNotNil,omitempty"`
+	FailureReasonEqualFold    *string  `json:"failureReasonEqualFold,omitempty"`
+	FailureReasonContainsFold *string  `json:"failureReasonContainsFold,omitempty"`
+
+	// "error_code" field predicates.
+	ErrorCode             *string  `json:"errorCode,omitempty"`
+	ErrorCodeNEQ          *string  `json:"errorCodeNEQ,omitempty"`
+	ErrorCodeIn           []string `json:"errorCodeIn,omitempty"`
+	ErrorCodeNotIn        []string `json:"errorCodeNotIn,omitempty"`
+	ErrorCodeGT           *string  `json:"errorCodeGT,omitempty"`
+	ErrorCodeGTE          *string  `json:"errorCodeGTE,omitempty"`
+	ErrorCodeLT           *string  `json:"errorCodeLT,omitempty"`
+	ErrorCodeLTE          *string  `json:"errorCodeLTE,omitempty"`
+	ErrorCodeContains     *string  `json:"errorCodeContains,omitempty"`
+	ErrorCodeHasPrefix    *string  `json:"errorCodeHasPrefix,omitempty"`
+	ErrorCodeHasSuffix    *string  `json:"errorCodeHasSuffix,omitempty"`
+	ErrorCodeIsNil        bool     `json:"errorCodeIsNil,omitempty"`
+	ErrorCodeNotNil       bool     `json:"errorCodeNotNil,omitempty"`
+	ErrorCodeEqualFold    *string  `json:"errorCodeEqualFold,omitempty"`
+	ErrorCodeContainsFold *string  `json:"errorCodeContainsFold,omitempty"`
+
 	// "response_status_code" field predicates.
 	ResponseStatusCode       *int  `json:"responseStatusCode,omitempty"`
 	ResponseStatusCodeNEQ    *int  `json:"responseStatusCodeNEQ,omitempty"`
@@ -8403,6 +8437,96 @@ func (i *RequestExecutionWhereInput) P() (predicate.RequestExecution, error) {
 	}
 	if i.ErrorMessageContainsFold != nil {
 		predicates = append(predicates, requestexecution.ErrorMessageContainsFold(*i.ErrorMessageContainsFold))
+	}
+	if i.FailureReason != nil {
+		predicates = append(predicates, requestexecution.FailureReasonEQ(*i.FailureReason))
+	}
+	if i.FailureReasonNEQ != nil {
+		predicates = append(predicates, requestexecution.FailureReasonNEQ(*i.FailureReasonNEQ))
+	}
+	if len(i.FailureReasonIn) > 0 {
+		predicates = append(predicates, requestexecution.FailureReasonIn(i.FailureReasonIn...))
+	}
+	if len(i.FailureReasonNotIn) > 0 {
+		predicates = append(predicates, requestexecution.FailureReasonNotIn(i.FailureReasonNotIn...))
+	}
+	if i.FailureReasonGT != nil {
+		predicates = append(predicates, requestexecution.FailureReasonGT(*i.FailureReasonGT))
+	}
+	if i.FailureReasonGTE != nil {
+		predicates = append(predicates, requestexecution.FailureReasonGTE(*i.FailureReasonGTE))
+	}
+	if i.FailureReasonLT != nil {
+		predicates = append(predicates, requestexecution.FailureReasonLT(*i.FailureReasonLT))
+	}
+	if i.FailureReasonLTE != nil {
+		predicates = append(predicates, requestexecution.FailureReasonLTE(*i.FailureReasonLTE))
+	}
+	if i.FailureReasonContains != nil {
+		predicates = append(predicates, requestexecution.FailureReasonContains(*i.FailureReasonContains))
+	}
+	if i.FailureReasonHasPrefix != nil {
+		predicates = append(predicates, requestexecution.FailureReasonHasPrefix(*i.FailureReasonHasPrefix))
+	}
+	if i.FailureReasonHasSuffix != nil {
+		predicates = append(predicates, requestexecution.FailureReasonHasSuffix(*i.FailureReasonHasSuffix))
+	}
+	if i.FailureReasonIsNil {
+		predicates = append(predicates, requestexecution.FailureReasonIsNil())
+	}
+	if i.FailureReasonNotNil {
+		predicates = append(predicates, requestexecution.FailureReasonNotNil())
+	}
+	if i.FailureReasonEqualFold != nil {
+		predicates = append(predicates, requestexecution.FailureReasonEqualFold(*i.FailureReasonEqualFold))
+	}
+	if i.FailureReasonContainsFold != nil {
+		predicates = append(predicates, requestexecution.FailureReasonContainsFold(*i.FailureReasonContainsFold))
+	}
+	if i.ErrorCode != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeEQ(*i.ErrorCode))
+	}
+	if i.ErrorCodeNEQ != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeNEQ(*i.ErrorCodeNEQ))
+	}
+	if len(i.ErrorCodeIn) > 0 {
+		predicates = append(predicates, requestexecution.ErrorCodeIn(i.ErrorCodeIn...))
+	}
+	if len(i.ErrorCodeNotIn) > 0 {
+		predicates = append(predicates, requestexecution.ErrorCodeNotIn(i.ErrorCodeNotIn...))
+	}
+	if i.ErrorCodeGT != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeGT(*i.ErrorCodeGT))
+	}
+	if i.ErrorCodeGTE != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeGTE(*i.ErrorCodeGTE))
+	}
+	if i.ErrorCodeLT != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeLT(*i.ErrorCodeLT))
+	}
+	if i.ErrorCodeLTE != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeLTE(*i.ErrorCodeLTE))
+	}
+	if i.ErrorCodeContains != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeContains(*i.ErrorCodeContains))
+	}
+	if i.ErrorCodeHasPrefix != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeHasPrefix(*i.ErrorCodeHasPrefix))
+	}
+	if i.ErrorCodeHasSuffix != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeHasSuffix(*i.ErrorCodeHasSuffix))
+	}
+	if i.ErrorCodeIsNil {
+		predicates = append(predicates, requestexecution.ErrorCodeIsNil())
+	}
+	if i.ErrorCodeNotNil {
+		predicates = append(predicates, requestexecution.ErrorCodeNotNil())
+	}
+	if i.ErrorCodeEqualFold != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeEqualFold(*i.ErrorCodeEqualFold))
+	}
+	if i.ErrorCodeContainsFold != nil {
+		predicates = append(predicates, requestexecution.ErrorCodeContainsFold(*i.ErrorCodeContainsFold))
 	}
 	if i.ResponseStatusCode != nil {
 		predicates = append(predicates, requestexecution.ResponseStatusCodeEQ(*i.ResponseStatusCode))

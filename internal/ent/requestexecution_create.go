@@ -245,6 +245,34 @@ func (_c *RequestExecutionCreate) SetNillableErrorMessage(v *string) *RequestExe
 	return _c
 }
 
+// SetFailureReason sets the "failure_reason" field.
+func (_c *RequestExecutionCreate) SetFailureReason(v string) *RequestExecutionCreate {
+	_c.mutation.SetFailureReason(v)
+	return _c
+}
+
+// SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
+func (_c *RequestExecutionCreate) SetNillableFailureReason(v *string) *RequestExecutionCreate {
+	if v != nil {
+		_c.SetFailureReason(*v)
+	}
+	return _c
+}
+
+// SetErrorCode sets the "error_code" field.
+func (_c *RequestExecutionCreate) SetErrorCode(v string) *RequestExecutionCreate {
+	_c.mutation.SetErrorCode(v)
+	return _c
+}
+
+// SetNillableErrorCode sets the "error_code" field if the given value is not nil.
+func (_c *RequestExecutionCreate) SetNillableErrorCode(v *string) *RequestExecutionCreate {
+	if v != nil {
+		_c.SetErrorCode(*v)
+	}
+	return _c
+}
+
 // SetResponseStatusCode sets the "response_status_code" field.
 func (_c *RequestExecutionCreate) SetResponseStatusCode(v int) *RequestExecutionCreate {
 	_c.mutation.SetResponseStatusCode(v)
@@ -588,6 +616,14 @@ func (_c *RequestExecutionCreate) createSpec() (*RequestExecution, *sqlgraph.Cre
 		_spec.SetField(requestexecution.FieldErrorMessage, field.TypeString, value)
 		_node.ErrorMessage = value
 	}
+	if value, ok := _c.mutation.FailureReason(); ok {
+		_spec.SetField(requestexecution.FieldFailureReason, field.TypeString, value)
+		_node.FailureReason = value
+	}
+	if value, ok := _c.mutation.ErrorCode(); ok {
+		_spec.SetField(requestexecution.FieldErrorCode, field.TypeString, value)
+		_node.ErrorCode = value
+	}
 	if value, ok := _c.mutation.ResponseStatusCode(); ok {
 		_spec.SetField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
 		_node.ResponseStatusCode = &value
@@ -872,6 +908,42 @@ func (u *RequestExecutionUpsert) UpdateErrorMessage() *RequestExecutionUpsert {
 // ClearErrorMessage clears the value of the "error_message" field.
 func (u *RequestExecutionUpsert) ClearErrorMessage() *RequestExecutionUpsert {
 	u.SetNull(requestexecution.FieldErrorMessage)
+	return u
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (u *RequestExecutionUpsert) SetFailureReason(v string) *RequestExecutionUpsert {
+	u.Set(requestexecution.FieldFailureReason, v)
+	return u
+}
+
+// UpdateFailureReason sets the "failure_reason" field to the value that was provided on create.
+func (u *RequestExecutionUpsert) UpdateFailureReason() *RequestExecutionUpsert {
+	u.SetExcluded(requestexecution.FieldFailureReason)
+	return u
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (u *RequestExecutionUpsert) ClearFailureReason() *RequestExecutionUpsert {
+	u.SetNull(requestexecution.FieldFailureReason)
+	return u
+}
+
+// SetErrorCode sets the "error_code" field.
+func (u *RequestExecutionUpsert) SetErrorCode(v string) *RequestExecutionUpsert {
+	u.Set(requestexecution.FieldErrorCode, v)
+	return u
+}
+
+// UpdateErrorCode sets the "error_code" field to the value that was provided on create.
+func (u *RequestExecutionUpsert) UpdateErrorCode() *RequestExecutionUpsert {
+	u.SetExcluded(requestexecution.FieldErrorCode)
+	return u
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (u *RequestExecutionUpsert) ClearErrorCode() *RequestExecutionUpsert {
+	u.SetNull(requestexecution.FieldErrorCode)
 	return u
 }
 
@@ -1260,6 +1332,48 @@ func (u *RequestExecutionUpsertOne) UpdateErrorMessage() *RequestExecutionUpsert
 func (u *RequestExecutionUpsertOne) ClearErrorMessage() *RequestExecutionUpsertOne {
 	return u.Update(func(s *RequestExecutionUpsert) {
 		s.ClearErrorMessage()
+	})
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (u *RequestExecutionUpsertOne) SetFailureReason(v string) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetFailureReason(v)
+	})
+}
+
+// UpdateFailureReason sets the "failure_reason" field to the value that was provided on create.
+func (u *RequestExecutionUpsertOne) UpdateFailureReason() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateFailureReason()
+	})
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (u *RequestExecutionUpsertOne) ClearFailureReason() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearFailureReason()
+	})
+}
+
+// SetErrorCode sets the "error_code" field.
+func (u *RequestExecutionUpsertOne) SetErrorCode(v string) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetErrorCode(v)
+	})
+}
+
+// UpdateErrorCode sets the "error_code" field to the value that was provided on create.
+func (u *RequestExecutionUpsertOne) UpdateErrorCode() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateErrorCode()
+	})
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (u *RequestExecutionUpsertOne) ClearErrorCode() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearErrorCode()
 	})
 }
 
@@ -1840,6 +1954,48 @@ func (u *RequestExecutionUpsertBulk) UpdateErrorMessage() *RequestExecutionUpser
 func (u *RequestExecutionUpsertBulk) ClearErrorMessage() *RequestExecutionUpsertBulk {
 	return u.Update(func(s *RequestExecutionUpsert) {
 		s.ClearErrorMessage()
+	})
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (u *RequestExecutionUpsertBulk) SetFailureReason(v string) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetFailureReason(v)
+	})
+}
+
+// UpdateFailureReason sets the "failure_reason" field to the value that was provided on create.
+func (u *RequestExecutionUpsertBulk) UpdateFailureReason() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateFailureReason()
+	})
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (u *RequestExecutionUpsertBulk) ClearFailureReason() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearFailureReason()
+	})
+}
+
+// SetErrorCode sets the "error_code" field.
+func (u *RequestExecutionUpsertBulk) SetErrorCode(v string) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetErrorCode(v)
+	})
+}
+
+// UpdateErrorCode sets the "error_code" field to the value that was provided on create.
+func (u *RequestExecutionUpsertBulk) UpdateErrorCode() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateErrorCode()
+	})
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (u *RequestExecutionUpsertBulk) ClearErrorCode() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearErrorCode()
 	})
 }
 

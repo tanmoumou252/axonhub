@@ -4681,6 +4681,14 @@ type RequestExecution implements Node {
   responseChunks: [JSONRawMessage!] @goField(forceResolver: true)
   errorMessage: String
   """
+  Stable coarse failure reason for this execution attempt
+  """
+  failureReason: String
+  """
+  Classified error code mirrored from the failure
+  """
+  errorCode: String
+  """
   HTTP status code from the upstream provider
   """
   responseStatusCode: Int
@@ -4949,6 +4957,42 @@ input RequestExecutionWhereInput {
   errorMessageNotNil: Boolean
   errorMessageEqualFold: String
   errorMessageContainsFold: String
+  """
+  failure_reason field predicates
+  """
+  failureReason: String
+  failureReasonNEQ: String
+  failureReasonIn: [String!]
+  failureReasonNotIn: [String!]
+  failureReasonGT: String
+  failureReasonGTE: String
+  failureReasonLT: String
+  failureReasonLTE: String
+  failureReasonContains: String
+  failureReasonHasPrefix: String
+  failureReasonHasSuffix: String
+  failureReasonIsNil: Boolean
+  failureReasonNotNil: Boolean
+  failureReasonEqualFold: String
+  failureReasonContainsFold: String
+  """
+  error_code field predicates
+  """
+  errorCode: String
+  errorCodeNEQ: String
+  errorCodeIn: [String!]
+  errorCodeNotIn: [String!]
+  errorCodeGT: String
+  errorCodeGTE: String
+  errorCodeLT: String
+  errorCodeLTE: String
+  errorCodeContains: String
+  errorCodeHasPrefix: String
+  errorCodeHasSuffix: String
+  errorCodeIsNil: Boolean
+  errorCodeNotNil: Boolean
+  errorCodeEqualFold: String
+  errorCodeContainsFold: String
   """
   response_status_code field predicates
   """

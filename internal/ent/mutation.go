@@ -25551,6 +25551,8 @@ type RequestExecutionMutation struct {
 	response_chunks                   *[]objects.JSONRawMessage
 	appendresponse_chunks             []objects.JSONRawMessage
 	error_message                     *string
+	failure_reason                    *string
+	error_code                        *string
 	response_status_code              *int
 	addresponse_status_code           *int
 	status                            *requestexecution.Status
@@ -26609,6 +26611,104 @@ func (m *RequestExecutionMutation) ResetErrorMessage() {
 	delete(m.clearedFields, requestexecution.FieldErrorMessage)
 }
 
+// SetFailureReason sets the "failure_reason" field.
+func (m *RequestExecutionMutation) SetFailureReason(s string) {
+	m.failure_reason = &s
+}
+
+// FailureReason returns the value of the "failure_reason" field in the mutation.
+func (m *RequestExecutionMutation) FailureReason() (r string, exists bool) {
+	v := m.failure_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailureReason returns the old "failure_reason" field's value of the RequestExecution entity.
+// If the RequestExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestExecutionMutation) OldFailureReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailureReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailureReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailureReason: %w", err)
+	}
+	return oldValue.FailureReason, nil
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (m *RequestExecutionMutation) ClearFailureReason() {
+	m.failure_reason = nil
+	m.clearedFields[requestexecution.FieldFailureReason] = struct{}{}
+}
+
+// FailureReasonCleared returns if the "failure_reason" field was cleared in this mutation.
+func (m *RequestExecutionMutation) FailureReasonCleared() bool {
+	_, ok := m.clearedFields[requestexecution.FieldFailureReason]
+	return ok
+}
+
+// ResetFailureReason resets all changes to the "failure_reason" field.
+func (m *RequestExecutionMutation) ResetFailureReason() {
+	m.failure_reason = nil
+	delete(m.clearedFields, requestexecution.FieldFailureReason)
+}
+
+// SetErrorCode sets the "error_code" field.
+func (m *RequestExecutionMutation) SetErrorCode(s string) {
+	m.error_code = &s
+}
+
+// ErrorCode returns the value of the "error_code" field in the mutation.
+func (m *RequestExecutionMutation) ErrorCode() (r string, exists bool) {
+	v := m.error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorCode returns the old "error_code" field's value of the RequestExecution entity.
+// If the RequestExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestExecutionMutation) OldErrorCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorCode: %w", err)
+	}
+	return oldValue.ErrorCode, nil
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (m *RequestExecutionMutation) ClearErrorCode() {
+	m.error_code = nil
+	m.clearedFields[requestexecution.FieldErrorCode] = struct{}{}
+}
+
+// ErrorCodeCleared returns if the "error_code" field was cleared in this mutation.
+func (m *RequestExecutionMutation) ErrorCodeCleared() bool {
+	_, ok := m.clearedFields[requestexecution.FieldErrorCode]
+	return ok
+}
+
+// ResetErrorCode resets all changes to the "error_code" field.
+func (m *RequestExecutionMutation) ResetErrorCode() {
+	m.error_code = nil
+	delete(m.clearedFields, requestexecution.FieldErrorCode)
+}
+
 // SetResponseStatusCode sets the "response_status_code" field.
 func (m *RequestExecutionMutation) SetResponseStatusCode(i int) {
 	m.response_status_code = &i
@@ -27280,7 +27380,7 @@ func (m *RequestExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RequestExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 30)
 	if m.created_at != nil {
 		fields = append(fields, requestexecution.FieldCreatedAt)
 	}
@@ -27337,6 +27437,12 @@ func (m *RequestExecutionMutation) Fields() []string {
 	}
 	if m.error_message != nil {
 		fields = append(fields, requestexecution.FieldErrorMessage)
+	}
+	if m.failure_reason != nil {
+		fields = append(fields, requestexecution.FieldFailureReason)
+	}
+	if m.error_code != nil {
+		fields = append(fields, requestexecution.FieldErrorCode)
 	}
 	if m.response_status_code != nil {
 		fields = append(fields, requestexecution.FieldResponseStatusCode)
@@ -27411,6 +27517,10 @@ func (m *RequestExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.ResponseChunks()
 	case requestexecution.FieldErrorMessage:
 		return m.ErrorMessage()
+	case requestexecution.FieldFailureReason:
+		return m.FailureReason()
+	case requestexecution.FieldErrorCode:
+		return m.ErrorCode()
 	case requestexecution.FieldResponseStatusCode:
 		return m.ResponseStatusCode()
 	case requestexecution.FieldStatus:
@@ -27476,6 +27586,10 @@ func (m *RequestExecutionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldResponseChunks(ctx)
 	case requestexecution.FieldErrorMessage:
 		return m.OldErrorMessage(ctx)
+	case requestexecution.FieldFailureReason:
+		return m.OldFailureReason(ctx)
+	case requestexecution.FieldErrorCode:
+		return m.OldErrorCode(ctx)
 	case requestexecution.FieldResponseStatusCode:
 		return m.OldResponseStatusCode(ctx)
 	case requestexecution.FieldStatus:
@@ -27635,6 +27749,20 @@ func (m *RequestExecutionMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetErrorMessage(v)
+		return nil
+	case requestexecution.FieldFailureReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailureReason(v)
+		return nil
+	case requestexecution.FieldErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorCode(v)
 		return nil
 	case requestexecution.FieldResponseStatusCode:
 		v, ok := value.(int)
@@ -27837,6 +27965,12 @@ func (m *RequestExecutionMutation) ClearedFields() []string {
 	if m.FieldCleared(requestexecution.FieldErrorMessage) {
 		fields = append(fields, requestexecution.FieldErrorMessage)
 	}
+	if m.FieldCleared(requestexecution.FieldFailureReason) {
+		fields = append(fields, requestexecution.FieldFailureReason)
+	}
+	if m.FieldCleared(requestexecution.FieldErrorCode) {
+		fields = append(fields, requestexecution.FieldErrorCode)
+	}
 	if m.FieldCleared(requestexecution.FieldResponseStatusCode) {
 		fields = append(fields, requestexecution.FieldResponseStatusCode)
 	}
@@ -27901,6 +28035,12 @@ func (m *RequestExecutionMutation) ClearField(name string) error {
 		return nil
 	case requestexecution.FieldErrorMessage:
 		m.ClearErrorMessage()
+		return nil
+	case requestexecution.FieldFailureReason:
+		m.ClearFailureReason()
+		return nil
+	case requestexecution.FieldErrorCode:
+		m.ClearErrorCode()
 		return nil
 	case requestexecution.FieldResponseStatusCode:
 		m.ClearResponseStatusCode()
@@ -27984,6 +28124,12 @@ func (m *RequestExecutionMutation) ResetField(name string) error {
 		return nil
 	case requestexecution.FieldErrorMessage:
 		m.ResetErrorMessage()
+		return nil
+	case requestexecution.FieldFailureReason:
+		m.ResetFailureReason()
+		return nil
+	case requestexecution.FieldErrorCode:
+		m.ResetErrorCode()
 		return nil
 	case requestexecution.FieldResponseStatusCode:
 		m.ResetResponseStatusCode()

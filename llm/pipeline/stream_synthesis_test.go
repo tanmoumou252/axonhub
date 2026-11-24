@@ -53,6 +53,22 @@ func TestToDeltaStreamShape(t *testing.T) {
 	})
 }
 
+func TestToDeltaStreamShapeNormalizesDuplicateToolCallIndices(t *testing.T) {
+	resp := &llm.Response{Choices: []llm.Choice{{
+		Message: &llm.Message{ToolCalls: []llm.ToolCall{
+			{Index: 0, ID: "call_a", Type: "function", Function: llm.FunctionCall{Name: "a", Arguments: `{"x":1}`}},
+			{Index: 0, ID: "call_b", Type: "function", Function: llm.FunctionCall{Name: "b", Arguments: `{"y":2}`}},
+		}},
+	}}}
+	out := toDeltaStreamShape(resp)
+	require.Equal(t, 0, out.Choices[0].Delta.ToolCalls[0].Index)
+	require.Equal(t, 1, out.Choices[0].Delta.ToolCalls[1].Index, "duplicate indices from a complete response must be renormalized or the Anthropic inbound stream merges the calls")
+	require.Equal(t, "call_a", out.Choices[0].Delta.ToolCalls[0].ID)
+	require.Equal(t, "call_b", out.Choices[0].Delta.ToolCalls[1].ID)
+	require.Equal(t, `{"y":2}`, out.Choices[0].Delta.ToolCalls[1].Function.Arguments)
+	require.NotNil(t, resp.Choices[0].Message, "input must not be mutated")
+}
+
 func TestSupportsFakeStreamSynthesis(t *testing.T) {
 	require.True(t, supportsFakeStreamSynthesis(&llm.Request{RequestType: llm.RequestTypeChat, APIFormat: llm.APIFormatOpenAIChatCompletion}))
 	require.True(t, supportsFakeStreamSynthesis(&llm.Request{RequestType: llm.RequestTypeCompletion, APIFormat: llm.APIFormatOpenAICompletion}))

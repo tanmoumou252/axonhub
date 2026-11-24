@@ -10,6 +10,7 @@ import (
 
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer"
 )
 
@@ -129,4 +130,47 @@ func TestProcess_NonStreamTimeoutUsesChannelOverride(t *testing.T) {
 
 	_, err = p.Process(context.Background(), &httpclient.Request{})
 	require.NoError(t, err)
+}
+
+// blockingExecutor blocks Do until its context is cancelled, then returns ctx.Err().
+type blockingExecutor struct{}
+
+func (e *blockingExecutor) Do(ctx context.Context, _ *httpclient.Request) (*httpclient.Response, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (e *blockingExecutor) DoStream(ctx context.Context, _ *httpclient.Request) (streams.Stream[*httpclient.StreamEvent], error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// fakeStreamOutboundWrapper wraps a mockOutbound and reports a FakeStreamMode,
+// so the pipeline's Mode B synthesis branch is selected.
+type fakeStreamOutboundWrapper struct {
+	*mockOutbound
+	mode FakeStreamMode
+}
+
+func (w *fakeStreamOutboundWrapper) FakeStreamMode() FakeStreamMode { return w.mode }
+
+// TestSynthesizeStreamFromNonStreamSurfacesNonStreamTimeout red: the synthesis
+// path (Mode B) must surface ErrNonStreamResponseTimeout like its sibling
+// branches (pipeline.go:506-515/:523-532). Without the isNonStreamTimeout check
+// in synthesizeStreamFromNonStream, the deadline error is wrapped and the
+// errors.Is contract is broken.
+func TestSynthesizeStreamFromNonStreamSurfacesNonStreamTimeout(t *testing.T) {
+	inbound := &mockInbound{
+		transformRequest: func(context.Context, *httpclient.Request) (*llm.Request, error) {
+			return &llm.Request{Stream: lo.ToPtr(true)}, nil
+		},
+	}
+	outbound := &fakeStreamOutboundWrapper{
+		mockOutbound: &mockOutbound{apiFormat: llm.APIFormatOpenAIChatCompletion},
+		mode:         FakeStreamModeFake,
+	}
+	p := NewFactory(&blockingExecutor{}).Pipeline(inbound, outbound, WithResponseTimeouts(0, 30*time.Millisecond))
+
+	_, err := p.Process(context.Background(), &httpclient.Request{Body: []byte(`{"stream":true}`)})
+	require.ErrorIs(t, err, ErrNonStreamResponseTimeout, "the synthesized path must preserve the non-stream timeout marker like its sibling branches")
 }

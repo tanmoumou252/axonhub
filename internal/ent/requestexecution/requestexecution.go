@@ -55,6 +55,10 @@ const (
 	FieldResponseChunks = "response_chunks"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
+	// FieldFailureReason holds the string denoting the failure_reason field in the database.
+	FieldFailureReason = "failure_reason"
+	// FieldErrorCode holds the string denoting the error_code field in the database.
+	FieldErrorCode = "error_code"
 	// FieldResponseStatusCode holds the string denoting the response_status_code field in the database.
 	FieldResponseStatusCode = "response_status_code"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -135,6 +139,8 @@ var Columns = []string{
 	FieldResponseBody,
 	FieldResponseChunks,
 	FieldErrorMessage,
+	FieldFailureReason,
+	FieldErrorCode,
 	FieldResponseStatusCode,
 	FieldStatus,
 	FieldStream,
@@ -286,6 +292,16 @@ func ByRequestBodyChunked(opts ...sql.OrderTermOption) OrderOption {
 // ByErrorMessage orders the results by the error_message field.
 func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
+}
+
+// ByFailureReason orders the results by the failure_reason field.
+func ByFailureReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailureReason, opts...).ToFunc()
+}
+
+// ByErrorCode orders the results by the error_code field.
+func ByErrorCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldErrorCode, opts...).ToFunc()
 }
 
 // ByResponseStatusCode orders the results by the response_status_code field.

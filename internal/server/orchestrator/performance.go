@@ -57,9 +57,14 @@ func (m *performanceRecording) OnOutboundRawRequest(ctx context.Context, request
 		return request, nil
 	}
 
-	// Preserve Stream flag from existing PerformanceRecord (set in OnInboundLlmRequest)
+	// Baseline the stream flag on the client's original intent, not the previous
+	// attempt's Perf.Stream: a failover from a fake (forced non-stream) candidate
+	// to a real streaming candidate must record the genuine streaming attempt.
+	// Fall back to Perf.Stream only when the original intent was never captured.
 	var streamFlag bool
-	if m.outbound.state.Perf != nil {
+	if m.outbound.state.OriginalRequestStream != nil {
+		streamFlag = *m.outbound.state.OriginalRequestStream
+	} else if m.outbound.state.Perf != nil {
 		streamFlag = m.outbound.state.Perf.Stream
 	}
 

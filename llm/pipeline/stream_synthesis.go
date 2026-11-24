@@ -66,6 +66,38 @@ func supportsFakeStreamSynthesis(request *llm.Request) bool {
 	}
 }
 
+// normalizeToolCallIndices renumbers a choice's tool calls by position ONLY when
+// duplicate Index values are present. A complete (non-streaming) response wire
+// form usually omits the delta-only `index` field, so a decoder defaults every
+// call to 0; the Anthropic inbound stream transformer groups deltas by Index and
+// would merge distinct calls into one (dropping IDs/names and concatenating
+// arguments) before validateToolArguments fails the whole stream. Legitimate
+// sparse or unique indices pass through untouched. The fix operates on a copied
+// slice so the input response is never mutated.
+func normalizeToolCallIndices(calls []llm.ToolCall) []llm.ToolCall {
+	if len(calls) < 2 {
+		return calls
+	}
+	seen := make(map[int]struct{}, len(calls))
+	duplicate := false
+	for _, call := range calls {
+		if _, ok := seen[call.Index]; ok {
+			duplicate = true
+			break
+		}
+		seen[call.Index] = struct{}{}
+	}
+	if !duplicate {
+		return calls
+	}
+	out := make([]llm.ToolCall, len(calls))
+	copy(out, calls)
+	for i := range out {
+		out[i].Index = i
+	}
+	return out
+}
+
 // toDeltaStreamShape rewrites each choice's full Message into a Delta-bearing
 // choice so Anthropic's inbound stream transformer (which reads only choice.Delta)
 // does not silently drop the body. Idempotent for already-Delta choices.
@@ -80,6 +112,13 @@ func toDeltaStreamShape(resp *llm.Response) *llm.Response {
 		if c.Message != nil && c.Delta == nil {
 			nc.Delta = c.Message
 			nc.Message = nil
+		}
+		if nc.Delta != nil && len(nc.Delta.ToolCalls) > 0 {
+			if calls := normalizeToolCallIndices(nc.Delta.ToolCalls); &calls[0] != &nc.Delta.ToolCalls[0] {
+				nd := *nc.Delta
+				nd.ToolCalls = calls
+				nc.Delta = &nd
+			}
 		}
 		out.Choices = append(out.Choices, nc)
 	}
@@ -101,6 +140,14 @@ func (p *pipeline) synthesizeStreamFromNonStream(
 	httpResp, err := executor.Do(timeoutCtx, request)
 	if err != nil {
 		p.applyRawErrorResponseMiddlewares(ctx, err)
+		// Preserve the non-stream timeout sentinel like the sibling branches
+		// (pipeline.go auto-aggregate / default non-stream) so callers can
+		// errors.Is(err, ErrNonStreamResponseTimeout). Without this the deadline
+		// is wrapped into a generic UpstreamError and the timeout classification
+		// (isResponseTimeoutError → model-level failure) silently degrades.
+		if isNonStreamTimeout(timeoutCtx, nonStreamTimeout) {
+			return nil, ErrNonStreamResponseTimeout
+		}
 		if httpErr, ok := errors.AsType[*httpclient.Error](err); ok {
 			return nil, WrapUpstreamError(p.Outbound.TransformError(ctx, httpErr))
 		}

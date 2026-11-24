@@ -338,7 +338,9 @@ export const modelProtocolSchema = z.object({
     .nullish()
     .transform((value) => value ?? true),
   // Per-model fake stream override; unset inherits the channel-level policy.
-  fakeStream: z.enum(['off', 'placeholder', 'fake_stream']).optional(),
+  // The backend marshals an unset value as GraphQL null, so the field must be
+  // nullish (not merely optional) or full reads of any modelProtocol fail parse.
+  fakeStream: z.enum(['off', 'placeholder', 'fake_stream']).nullish(),
 });
 export type ModelProtocol = z.infer<typeof modelProtocolSchema>;
 

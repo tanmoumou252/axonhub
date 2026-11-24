@@ -166,6 +166,46 @@ func (_u *RequestExecutionUpdate) ClearErrorMessage() *RequestExecutionUpdate {
 	return _u
 }
 
+// SetFailureReason sets the "failure_reason" field.
+func (_u *RequestExecutionUpdate) SetFailureReason(v string) *RequestExecutionUpdate {
+	_u.mutation.SetFailureReason(v)
+	return _u
+}
+
+// SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
+func (_u *RequestExecutionUpdate) SetNillableFailureReason(v *string) *RequestExecutionUpdate {
+	if v != nil {
+		_u.SetFailureReason(*v)
+	}
+	return _u
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (_u *RequestExecutionUpdate) ClearFailureReason() *RequestExecutionUpdate {
+	_u.mutation.ClearFailureReason()
+	return _u
+}
+
+// SetErrorCode sets the "error_code" field.
+func (_u *RequestExecutionUpdate) SetErrorCode(v string) *RequestExecutionUpdate {
+	_u.mutation.SetErrorCode(v)
+	return _u
+}
+
+// SetNillableErrorCode sets the "error_code" field if the given value is not nil.
+func (_u *RequestExecutionUpdate) SetNillableErrorCode(v *string) *RequestExecutionUpdate {
+	if v != nil {
+		_u.SetErrorCode(*v)
+	}
+	return _u
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (_u *RequestExecutionUpdate) ClearErrorCode() *RequestExecutionUpdate {
+	_u.mutation.ClearErrorCode()
+	return _u
+}
+
 // SetResponseStatusCode sets the "response_status_code" field.
 func (_u *RequestExecutionUpdate) SetResponseStatusCode(v int) *RequestExecutionUpdate {
 	_u.mutation.ResetResponseStatusCode()
@@ -519,6 +559,18 @@ func (_u *RequestExecutionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(requestexecution.FieldErrorMessage, field.TypeString)
 	}
+	if value, ok := _u.mutation.FailureReason(); ok {
+		_spec.SetField(requestexecution.FieldFailureReason, field.TypeString, value)
+	}
+	if _u.mutation.FailureReasonCleared() {
+		_spec.ClearField(requestexecution.FieldFailureReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.ErrorCode(); ok {
+		_spec.SetField(requestexecution.FieldErrorCode, field.TypeString, value)
+	}
+	if _u.mutation.ErrorCodeCleared() {
+		_spec.ClearField(requestexecution.FieldErrorCode, field.TypeString)
+	}
 	if value, ok := _u.mutation.ResponseStatusCode(); ok {
 		_spec.SetField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
 	}
@@ -776,6 +828,46 @@ func (_u *RequestExecutionUpdateOne) SetNillableErrorMessage(v *string) *Request
 // ClearErrorMessage clears the value of the "error_message" field.
 func (_u *RequestExecutionUpdateOne) ClearErrorMessage() *RequestExecutionUpdateOne {
 	_u.mutation.ClearErrorMessage()
+	return _u
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (_u *RequestExecutionUpdateOne) SetFailureReason(v string) *RequestExecutionUpdateOne {
+	_u.mutation.SetFailureReason(v)
+	return _u
+}
+
+// SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
+func (_u *RequestExecutionUpdateOne) SetNillableFailureReason(v *string) *RequestExecutionUpdateOne {
+	if v != nil {
+		_u.SetFailureReason(*v)
+	}
+	return _u
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (_u *RequestExecutionUpdateOne) ClearFailureReason() *RequestExecutionUpdateOne {
+	_u.mutation.ClearFailureReason()
+	return _u
+}
+
+// SetErrorCode sets the "error_code" field.
+func (_u *RequestExecutionUpdateOne) SetErrorCode(v string) *RequestExecutionUpdateOne {
+	_u.mutation.SetErrorCode(v)
+	return _u
+}
+
+// SetNillableErrorCode sets the "error_code" field if the given value is not nil.
+func (_u *RequestExecutionUpdateOne) SetNillableErrorCode(v *string) *RequestExecutionUpdateOne {
+	if v != nil {
+		_u.SetErrorCode(*v)
+	}
+	return _u
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (_u *RequestExecutionUpdateOne) ClearErrorCode() *RequestExecutionUpdateOne {
+	_u.mutation.ClearErrorCode()
 	return _u
 }
 
@@ -1161,6 +1253,18 @@ func (_u *RequestExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Reques
 	}
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(requestexecution.FieldErrorMessage, field.TypeString)
+	}
+	if value, ok := _u.mutation.FailureReason(); ok {
+		_spec.SetField(requestexecution.FieldFailureReason, field.TypeString, value)
+	}
+	if _u.mutation.FailureReasonCleared() {
+		_spec.ClearField(requestexecution.FieldFailureReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.ErrorCode(); ok {
+		_spec.SetField(requestexecution.FieldErrorCode, field.TypeString, value)
+	}
+	if _u.mutation.ErrorCodeCleared() {
+		_spec.ClearField(requestexecution.FieldErrorCode, field.TypeString)
 	}
 	if value, ok := _u.mutation.ResponseStatusCode(); ok {
 		_spec.SetField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)

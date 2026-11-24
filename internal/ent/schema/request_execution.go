@@ -121,6 +121,16 @@ func (RequestExecution) Fields() []ent.Field {
 			entgql.Directives(forceResolver()),
 		),
 		field.String("error_message").Optional(),
+		// Stable coarse reason for why this attempt failed, suitable for UI
+		// grouping and alert rules: client_cancel, first_token_timeout,
+		// non_stream_timeout, upstream_idle_timeout, upstream_eof,
+		// upstream_stream_interrupted, upstream_http_error, empty_response.
+		field.String("failure_reason").Optional().
+			Comment("Stable coarse failure reason for this execution attempt"),
+		// Stable classified error code mirrored from the failure (e.g.
+		// upstream_stream_interrupted); empty when no classification applied.
+		field.String("error_code").Optional().
+			Comment("Classified error code mirrored from the failure"),
 		field.Int("response_status_code").Optional().Nillable().
 			Comment("HTTP status code from the upstream provider"),
 		// The status of the request execution.

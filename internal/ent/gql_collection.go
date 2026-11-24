@@ -4096,6 +4096,16 @@ func (_q *RequestExecutionQuery) collectField(ctx context.Context, oneNode bool,
 				selectedFields = append(selectedFields, requestexecution.FieldErrorMessage)
 				fieldSeen[requestexecution.FieldErrorMessage] = struct{}{}
 			}
+		case "failureReason":
+			if _, ok := fieldSeen[requestexecution.FieldFailureReason]; !ok {
+				selectedFields = append(selectedFields, requestexecution.FieldFailureReason)
+				fieldSeen[requestexecution.FieldFailureReason] = struct{}{}
+			}
+		case "errorCode":
+			if _, ok := fieldSeen[requestexecution.FieldErrorCode]; !ok {
+				selectedFields = append(selectedFields, requestexecution.FieldErrorCode)
+				fieldSeen[requestexecution.FieldErrorCode] = struct{}{}
+			}
 		case "responseStatusCode":
 			if _, ok := fieldSeen[requestexecution.FieldResponseStatusCode]; !ok {
 				selectedFields = append(selectedFields, requestexecution.FieldResponseStatusCode)

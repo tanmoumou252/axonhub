@@ -14,6 +14,7 @@ import (
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/pipeline"
 )
 
 const (
@@ -23,6 +24,82 @@ const (
 	// ended before the response completed: EOF, reset, timeout or a missing terminal event.
 	ErrCodeUpstreamStreamInterrupted = "upstream_stream_interrupted"
 )
+
+// Stable coarse failure reasons persisted on RequestExecution.failure_reason and
+// emitted on the request.attempt.failed / request.failed events. Values are a
+// wire-visible contract: UI grouping and alert rules match on them verbatim.
+const (
+	FailureReasonClientCancel              = "client_cancel"
+	FailureReasonFirstTokenTimeout         = "first_token_timeout"
+	FailureReasonNonStreamTimeout          = "non_stream_timeout"
+	FailureReasonUpstreamIdleTimeout       = "upstream_idle_timeout"
+	FailureReasonUpstreamEOF               = "upstream_eof"
+	FailureReasonUpstreamStreamInterrupted = "upstream_stream_interrupted"
+	FailureReasonUpstreamHTTPError         = "upstream_http_error"
+	FailureReasonEmptyResponse             = "empty_response"
+	FailureReasonUnknown                   = "unknown"
+)
+
+// FailureReason classifies a raw attempt failure into one stable coarse reason
+// for persistence and events. The decision ladder is:
+// idle timeout → client cancel → first-token timeout → non-stream timeout →
+// EOF → stream interrupted/reset → upstream HTTP error → empty response →
+// unknown. nil yields "" so no reason is written for a non-failure.
+//
+// Idle timeout is checked before cancellation because a stream-idle abort may
+// join a child context.Canceled; that join is still an upstream timeout, not a
+// client cancel. Cancellation matching mirrors the canceled-status special case
+// in persistRequestExecutionFailure.
+func FailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	if errors.Is(err, httpclient.ErrStreamIdleTimeout) {
+		return FailureReasonUpstreamIdleTimeout
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return FailureReasonClientCancel
+	}
+
+	if errors.Is(err, pipeline.ErrStreamFirstEventTimeout) {
+		return FailureReasonFirstTokenTimeout
+	}
+
+	if errors.Is(err, pipeline.ErrNonStreamResponseTimeout) {
+		return FailureReasonNonStreamTimeout
+	}
+
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return FailureReasonUpstreamEOF
+	}
+
+	if errors.Is(err, llm.ErrStreamIncomplete) ||
+		errors.Is(err, ErrStreamIncomplete) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		isWinsockResetError(err) {
+		return FailureReasonUpstreamStreamInterrupted
+	}
+
+	// A classified transport error unwraps to its cause, so EOF/reset causes
+	// already matched above; anything reaching here as a structured HTTP failure
+	// is an upstream HTTP error (including provider status responses).
+	if _, ok := errors.AsType[*httpclient.Error](err); ok {
+		return FailureReasonUpstreamHTTPError
+	}
+
+	if _, ok := errors.AsType[*llm.ResponseError](err); ok {
+		return FailureReasonUpstreamHTTPError
+	}
+
+	if errors.Is(err, pipeline.ErrEmptyResponse) {
+		return FailureReasonEmptyResponse
+	}
+
+	return FailureReasonUnknown
+}
 
 // IsUpstreamTransportError reports whether err is a transport-level failure of the
 // upstream connection rather than an HTTP error body or a local cancellation: the
@@ -139,19 +216,31 @@ func persistRequestExecutionFailure(
 	chunks ...*httpclient.StreamEvent,
 ) error {
 	status := requestexecution.StatusFailed
+	canceled := false
 	if !errors.Is(rawErr, httpclient.ErrStreamIdleTimeout) &&
 		(errors.Is(rawErr, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)) {
 		status = requestexecution.StatusCanceled
+		canceled = true
 	}
 
 	failure := ClassifyUpstreamTransportError(rawErr)
+	errorInfo := ExtractErrorInfo(failure)
+
+	// A cancellation carries no HTTP-shaped error, so the classifier yields
+	// nothing structured. The coarse reason itself is still known and is exactly
+	// what the attempt/request failure events publish, so the row and the event
+	// agree instead of leaving the reason column blank. The status column keeps
+	// carrying the "canceled" meaning on its own.
+	if errorInfo == nil && canceled {
+		errorInfo = &biz.ExecutionErrorInfo{FailureReason: FailureReason(rawErr)}
+	}
 
 	return requestService.UpdateRequestExecutionStatusWithMetrics(
 		ctx,
 		execution,
 		status,
 		ExtractErrorMessage(failure),
-		ExtractErrorInfo(failure),
+		errorInfo,
 		metrics,
 		upstreamModelID,
 		responseHeaders, chunks...,

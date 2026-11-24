@@ -130,6 +130,16 @@ func ErrorMessage(v string) predicate.RequestExecution {
 	return predicate.RequestExecution(sql.FieldEQ(FieldErrorMessage, v))
 }
 
+// FailureReason applies equality check predicate on the "failure_reason" field. It's identical to FailureReasonEQ.
+func FailureReason(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldEQ(FieldFailureReason, v))
+}
+
+// ErrorCode applies equality check predicate on the "error_code" field. It's identical to ErrorCodeEQ.
+func ErrorCode(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldEQ(FieldErrorCode, v))
+}
+
 // ResponseStatusCode applies equality check predicate on the "response_status_code" field. It's identical to ResponseStatusCodeEQ.
 func ResponseStatusCode(v int) predicate.RequestExecution {
 	return predicate.RequestExecution(sql.FieldEQ(FieldResponseStatusCode, v))
@@ -958,6 +968,156 @@ func ErrorMessageEqualFold(v string) predicate.RequestExecution {
 // ErrorMessageContainsFold applies the ContainsFold predicate on the "error_message" field.
 func ErrorMessageContainsFold(v string) predicate.RequestExecution {
 	return predicate.RequestExecution(sql.FieldContainsFold(FieldErrorMessage, v))
+}
+
+// FailureReasonEQ applies the EQ predicate on the "failure_reason" field.
+func FailureReasonEQ(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldEQ(FieldFailureReason, v))
+}
+
+// FailureReasonNEQ applies the NEQ predicate on the "failure_reason" field.
+func FailureReasonNEQ(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldNEQ(FieldFailureReason, v))
+}
+
+// FailureReasonIn applies the In predicate on the "failure_reason" field.
+func FailureReasonIn(vs ...string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldIn(FieldFailureReason, vs...))
+}
+
+// FailureReasonNotIn applies the NotIn predicate on the "failure_reason" field.
+func FailureReasonNotIn(vs ...string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldNotIn(FieldFailureReason, vs...))
+}
+
+// FailureReasonGT applies the GT predicate on the "failure_reason" field.
+func FailureReasonGT(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldGT(FieldFailureReason, v))
+}
+
+// FailureReasonGTE applies the GTE predicate on the "failure_reason" field.
+func FailureReasonGTE(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldGTE(FieldFailureReason, v))
+}
+
+// FailureReasonLT applies the LT predicate on the "failure_reason" field.
+func FailureReasonLT(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldLT(FieldFailureReason, v))
+}
+
+// FailureReasonLTE applies the LTE predicate on the "failure_reason" field.
+func FailureReasonLTE(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldLTE(FieldFailureReason, v))
+}
+
+// FailureReasonContains applies the Contains predicate on the "failure_reason" field.
+func FailureReasonContains(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldContains(FieldFailureReason, v))
+}
+
+// FailureReasonHasPrefix applies the HasPrefix predicate on the "failure_reason" field.
+func FailureReasonHasPrefix(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldHasPrefix(FieldFailureReason, v))
+}
+
+// FailureReasonHasSuffix applies the HasSuffix predicate on the "failure_reason" field.
+func FailureReasonHasSuffix(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldHasSuffix(FieldFailureReason, v))
+}
+
+// FailureReasonIsNil applies the IsNil predicate on the "failure_reason" field.
+func FailureReasonIsNil() predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldIsNull(FieldFailureReason))
+}
+
+// FailureReasonNotNil applies the NotNil predicate on the "failure_reason" field.
+func FailureReasonNotNil() predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldNotNull(FieldFailureReason))
+}
+
+// FailureReasonEqualFold applies the EqualFold predicate on the "failure_reason" field.
+func FailureReasonEqualFold(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldEqualFold(FieldFailureReason, v))
+}
+
+// FailureReasonContainsFold applies the ContainsFold predicate on the "failure_reason" field.
+func FailureReasonContainsFold(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldContainsFold(FieldFailureReason, v))
+}
+
+// ErrorCodeEQ applies the EQ predicate on the "error_code" field.
+func ErrorCodeEQ(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldEQ(FieldErrorCode, v))
+}
+
+// ErrorCodeNEQ applies the NEQ predicate on the "error_code" field.
+func ErrorCodeNEQ(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldNEQ(FieldErrorCode, v))
+}
+
+// ErrorCodeIn applies the In predicate on the "error_code" field.
+func ErrorCodeIn(vs ...string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldIn(FieldErrorCode, vs...))
+}
+
+// ErrorCodeNotIn applies the NotIn predicate on the "error_code" field.
+func ErrorCodeNotIn(vs ...string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldNotIn(FieldErrorCode, vs...))
+}
+
+// ErrorCodeGT applies the GT predicate on the "error_code" field.
+func ErrorCodeGT(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldGT(FieldErrorCode, v))
+}
+
+// ErrorCodeGTE applies the GTE predicate on the "error_code" field.
+func ErrorCodeGTE(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldGTE(FieldErrorCode, v))
+}
+
+// ErrorCodeLT applies the LT predicate on the "error_code" field.
+func ErrorCodeLT(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldLT(FieldErrorCode, v))
+}
+
+// ErrorCodeLTE applies the LTE predicate on the "error_code" field.
+func ErrorCodeLTE(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldLTE(FieldErrorCode, v))
+}
+
+// ErrorCodeContains applies the Contains predicate on the "error_code" field.
+func ErrorCodeContains(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldContains(FieldErrorCode, v))
+}
+
+// ErrorCodeHasPrefix applies the HasPrefix predicate on the "error_code" field.
+func ErrorCodeHasPrefix(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldHasPrefix(FieldErrorCode, v))
+}
+
+// ErrorCodeHasSuffix applies the HasSuffix predicate on the "error_code" field.
+func ErrorCodeHasSuffix(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldHasSuffix(FieldErrorCode, v))
+}
+
+// ErrorCodeIsNil applies the IsNil predicate on the "error_code" field.
+func ErrorCodeIsNil() predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldIsNull(FieldErrorCode))
+}
+
+// ErrorCodeNotNil applies the NotNil predicate on the "error_code" field.
+func ErrorCodeNotNil() predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldNotNull(FieldErrorCode))
+}
+
+// ErrorCodeEqualFold applies the EqualFold predicate on the "error_code" field.
+func ErrorCodeEqualFold(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldEqualFold(FieldErrorCode, v))
+}
+
+// ErrorCodeContainsFold applies the ContainsFold predicate on the "error_code" field.
+func ErrorCodeContainsFold(v string) predicate.RequestExecution {
+	return predicate.RequestExecution(sql.FieldContainsFold(FieldErrorCode, v))
 }
 
 // ResponseStatusCodeEQ applies the EQ predicate on the "response_status_code" field.

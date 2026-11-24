@@ -2,15 +2,23 @@ package orchestrator
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
+	"github.com/looplj/axonhub/internal/authz"
+	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/ent"
+	"github.com/looplj/axonhub/internal/ent/enttest"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/pipeline"
+	"github.com/looplj/axonhub/llm/transformer/openai"
 )
 
 func fakeStreamCandidate(mode objects.FakeStreamMode) *ChannelModelsCandidate {
@@ -219,4 +227,91 @@ func TestEffectiveFakeStreamModeMappedAlias(t *testing.T) {
 		modelAPIFormats: []string{chat},
 	}
 	require.Equal(t, objects.FakeStreamModeFake, effectiveFakeStreamMode(candidate, 0))
+}
+
+func TestFakeStreamModeMasterSwitchGating(t *testing.T) {
+	candidate := fakeStreamModeCandidate(objects.FakeStreamModeFake, "", llm.APIFormatOpenAIChatCompletion.String())
+	enabled := &PersistentOutboundTransformer{state: &PersistenceState{
+		CurrentCandidate:        candidate,
+		FakeStreamHandlerEnabled: true,
+	}}
+	require.Equal(t, pipeline.FakeStreamModeFake, enabled.FakeStreamMode())
+	gated := &PersistentOutboundTransformer{state: &PersistenceState{CurrentCandidate: candidate}}
+	require.Equal(t, pipeline.FakeStreamModeOff, gated.FakeStreamMode(),
+		"without the handler-enabled marker the master switch is off and no mode may leak through")
+}
+
+// outboundStreamCapturer records the stream flag of every raw outbound attempt,
+// which is the externally visible consequence of the master-switch marker.
+type outboundStreamCapturer struct {
+	pipeline.DummyMiddleware
+
+	attempts []bool
+}
+
+func (c *outboundStreamCapturer) Name() string { return "test-outbound-stream-capturer" }
+
+func (c *outboundStreamCapturer) OnOutboundRawRequest(ctx context.Context, request *httpclient.Request) (*httpclient.Request, error) {
+	c.attempts = append(c.attempts, gjson.GetBytes(request.Body, "stream").Bool())
+	return request, nil
+}
+
+// TestFakeStreamHandlerFlagCapturedThroughProcess proves the per-request
+// master-switch marker is captured from the context by the real entry point, the
+// way the handler installs it, rather than being handed to the state by a test.
+func TestFakeStreamHandlerFlagCapturedThroughProcess(t *testing.T) {
+	run := func(t *testing.T, withDecision, wantStream bool) {
+		t.Helper()
+
+		ctx := authz.WithTestBypass(context.Background())
+		client := enttest.NewEntClient(t, "sqlite3", "file:fake-stream-flag?mode=memory&_fk=0")
+		t.Cleanup(func() { require.NoError(t, client.Close()) })
+		ctx = ent.NewContext(ctx, client)
+
+		project := createTestProject(t, ctx, client)
+		ch := createTestChannel(t, ctx, client)
+		ch.Policies.FakeStream = objects.FakeStreamModeFake
+
+		outbound, err := openai.NewOutboundTransformer(ch.BaseURL, ch.Credentials.APIKey)
+		require.NoError(t, err)
+
+		executor := &mockExecutor{
+			response: &httpclient.Response{
+				StatusCode: 200,
+				Body:       buildMockOpenAIResponse("chatcmpl-flag", "gpt-4", "ok", 1, 2),
+				Headers:    http.Header{"Content-Type": {"application/json"}},
+			},
+			streamEvents: []*httpclient.StreamEvent{
+				{Data: []byte(`{"id":"chatcmpl-flag","object":"chat.completion.chunk","created":1677652288,"model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"}}]}`)},
+				{Data: []byte(`{"id":"chatcmpl-flag","object":"chat.completion.chunk","created":1677652288,"model":"gpt-4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`)},
+			},
+		}
+
+		bizChannel := &biz.Channel{Channel: ch, Outbound: outbound}
+		processor := newTestOrchestrator(t,
+			&staticChannelSelector{candidates: channelsToTestCandidates([]*biz.Channel{bizChannel}, "gpt-4")},
+			client, executor)
+		capturer := &outboundStreamCapturer{}
+		processor.Middlewares = append(processor.Middlewares, capturer)
+
+		if withDecision {
+			ctx = WithFakeStreamDecision(ctx, func(objects.FakeStreamMode) {})
+		}
+
+		ctx = contexts.WithProjectID(ctx, project.ID)
+		_, _ = processor.Process(ctx, buildTestRequest("gpt-4", "Hello!", true))
+
+		// The direction is asserted here, not left for execution time: without
+		// the callback the marker stays false and the upstream attempt must keep
+		// streaming; with it the marker is captured and Mode B must rewrite the
+		// attempt to non-streaming. Len==1 pins that this is the first attempt, so
+		// a failover retry cannot silently supply the observed value instead.
+		require.Len(t, capturer.attempts, 1, "exactly one outbound attempt is expected in this fixture")
+		require.Equal(t, wantStream, capturer.attempts[0],
+			"the per-request master-switch marker captured from the context is what gates the upstream stream rewrite")
+		require.EqualValues(t, 1, executor.requestCalls.Load(), "the attempt must reach the executor")
+	}
+
+	run(t, true, false)
+	run(t, false, true)
 }

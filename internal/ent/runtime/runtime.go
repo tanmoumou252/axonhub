@@ -1127,11 +1127,11 @@ func init() {
 	// requestexecution.DefaultRequestBodyChunked holds the default value on creation for the request_body_chunked field.
 	requestexecution.DefaultRequestBodyChunked = requestexecutionDescRequestBodyChunked.Default.(bool)
 	// requestexecutionDescStream is the schema descriptor for stream field.
-	requestexecutionDescStream := requestexecutionFields[19].Descriptor()
+	requestexecutionDescStream := requestexecutionFields[21].Descriptor()
 	// requestexecution.DefaultStream holds the default value on creation for the stream field.
 	requestexecution.DefaultStream = requestexecutionDescStream.Default.(bool)
 	// requestexecutionDescPassThroughApplied is the schema descriptor for pass_through_applied field.
-	requestexecutionDescPassThroughApplied := requestexecutionFields[25].Descriptor()
+	requestexecutionDescPassThroughApplied := requestexecutionFields[27].Descriptor()
 	// requestexecution.DefaultPassThroughApplied holds the default value on creation for the pass_through_applied field.
 	requestexecution.DefaultPassThroughApplied = requestexecutionDescPassThroughApplied.Default.(bool)
 	roleMixin := schema.Role{}.Mixin()

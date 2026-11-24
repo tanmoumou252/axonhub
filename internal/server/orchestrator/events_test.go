@@ -215,6 +215,38 @@ func TestRequestAttemptFailedEvent_NilBusStillPersists(t *testing.T) {
 	require.Equal(t, requestexecution.StatusFailed, saved.Status)
 }
 
+// TestRequestAttemptFailedEvent_CarriesFailureReason asserts the attempt-failed event
+// payload carries the coarse failure reason used for grouping and alert rules.
+func TestRequestAttemptFailedEvent_CarriesFailureReason(t *testing.T) {
+	ctx, client, state := newUpstreamModelPersistenceTest(t)
+	bus := events.NewBus()
+	t.Cleanup(func() { require.NoError(t, bus.Close(context.Background())) })
+	received := subscribeOrchestratorEvent(t, bus, events.TypeRequestAttemptFailed)
+
+	state.EventBus = bus
+	state.OutboundAttempt = 1
+	state.CurrentModelIndex = 0
+	state.CurrentCandidate = &ChannelModelsCandidate{
+		Channel: &biz.Channel{Channel: &ent.Channel{
+			ID:      21,
+			Name:    "upstream",
+			Type:    channel.TypeOpenai,
+			BaseURL: "https://up.example",
+			Status:  channel.StatusEnabled,
+		}},
+		Models: []biz.ChannelModelEntry{{ActualModel: "gpt-5"}},
+	}
+	state.RequestExec = createUpstreamModelTestExecution(t, ctx, client, state.Request, "gpt-5", llm.APIFormatOpenAIChatCompletion, false)
+	middleware := &persistRequestExecutionMiddleware{outbound: &PersistentOutboundTransformer{state: state}}
+
+	// A raw transport failure classifies to upstream_eof.
+	middleware.OnOutboundRawError(ctx, io.ErrUnexpectedEOF)
+
+	event := requireOrchestratorEvent(t, received)
+	require.Equal(t, events.TypeRequestAttemptFailed, event.Type)
+	require.Equal(t, FailureReasonUpstreamEOF, event.Data["failureReason"])
+}
+
 func newFailoverTransformer(bus *events.Bus) *PersistentOutboundTransformer {
 	left := failoverChannel(1, "alpha")
 	right := failoverChannel(2, "beta")

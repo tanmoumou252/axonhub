@@ -60,6 +60,10 @@ type RequestExecution struct {
 	ResponseChunks []objects.JSONRawMessage `json:"response_chunks,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage string `json:"error_message,omitempty"`
+	// Stable coarse failure reason for this execution attempt
+	FailureReason string `json:"failure_reason,omitempty"`
+	// Classified error code mirrored from the failure
+	ErrorCode string `json:"error_code,omitempty"`
 	// HTTP status code from the upstream provider
 	ResponseStatusCode *int `json:"response_status_code,omitempty"`
 	// Status holds the value of the "status" field.
@@ -156,7 +160,7 @@ func (*RequestExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case requestexecution.FieldID, requestexecution.FieldProjectID, requestexecution.FieldRequestID, requestexecution.FieldChannelID, requestexecution.FieldChannelAPIKeyIndex, requestexecution.FieldDataStorageID, requestexecution.FieldResponseStatusCode, requestexecution.FieldMetricsLatencyMs, requestexecution.FieldMetricsFirstTokenLatencyMs, requestexecution.FieldMetricsReasoningDurationMs:
 			values[i] = new(sql.NullInt64)
-		case requestexecution.FieldExternalID, requestexecution.FieldModelID, requestexecution.FieldUpstreamModelID, requestexecution.FieldFormat, requestexecution.FieldReasoningEffort, requestexecution.FieldChannelAPIKeySuffix, requestexecution.FieldErrorMessage, requestexecution.FieldStatus, requestexecution.FieldRequestURL:
+		case requestexecution.FieldExternalID, requestexecution.FieldModelID, requestexecution.FieldUpstreamModelID, requestexecution.FieldFormat, requestexecution.FieldReasoningEffort, requestexecution.FieldChannelAPIKeySuffix, requestexecution.FieldErrorMessage, requestexecution.FieldFailureReason, requestexecution.FieldErrorCode, requestexecution.FieldStatus, requestexecution.FieldRequestURL:
 			values[i] = new(sql.NullString)
 		case requestexecution.FieldCreatedAt, requestexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -305,6 +309,18 @@ func (_m *RequestExecution) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field error_message", values[i])
 			} else if value.Valid {
 				_m.ErrorMessage = value.String
+			}
+		case requestexecution.FieldFailureReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field failure_reason", values[i])
+			} else if value.Valid {
+				_m.FailureReason = value.String
+			}
+		case requestexecution.FieldErrorCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error_code", values[i])
+			} else if value.Valid {
+				_m.ErrorCode = value.String
 			}
 		case requestexecution.FieldResponseStatusCode:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -484,6 +500,12 @@ func (_m *RequestExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("error_message=")
 	builder.WriteString(_m.ErrorMessage)
+	builder.WriteString(", ")
+	builder.WriteString("failure_reason=")
+	builder.WriteString(_m.FailureReason)
+	builder.WriteString(", ")
+	builder.WriteString("error_code=")
+	builder.WriteString(_m.ErrorCode)
 	builder.WriteString(", ")
 	if v := _m.ResponseStatusCode; v != nil {
 		builder.WriteString("response_status_code=")

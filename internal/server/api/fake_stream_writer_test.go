@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,65 @@ import (
 	"github.com/looplj/axonhub/internal/server/orchestrator"
 	"github.com/looplj/axonhub/llm/httpclient"
 )
+
+// syncResponseRecorder serializes recorder access between the writer goroutine
+// and the test's polling reads; httptest.ResponseRecorder is not thread-safe.
+type syncResponseRecorder struct {
+	mu  sync.Mutex
+	rec *httptest.ResponseRecorder
+}
+
+func newSyncResponseRecorder() *syncResponseRecorder {
+	return &syncResponseRecorder{rec: httptest.NewRecorder()}
+}
+
+func (s *syncResponseRecorder) Header() http.Header {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec.Header()
+}
+
+func (s *syncResponseRecorder) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec.Write(p)
+}
+
+func (s *syncResponseRecorder) WriteHeader(code int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rec.WriteHeader(code)
+}
+
+func (s *syncResponseRecorder) Flush() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rec.Flush()
+}
+
+func (s *syncResponseRecorder) Unwrap() http.ResponseWriter { return s.rec }
+
+func (s *syncResponseRecorder) body() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec.Body.String()
+}
+
+// code and contentType read under the same lock the writer goroutine holds when
+// it calls WriteHeader/Write, so the test's polling reads never race the recorder.
+// Reading the header value inside the lock (rather than returning the map) avoids
+// touching the header map outside the critical section.
+func (s *syncResponseRecorder) code() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec.Code
+}
+
+func (s *syncResponseRecorder) contentType() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec.Header().Get("Content-Type")
+}
 
 type fakeStreamGate struct {
 	release chan struct{}
@@ -44,7 +104,7 @@ func (g *fakeStreamGate) Err() error   { return nil }
 func (g *fakeStreamGate) Close() error { return nil }
 
 func TestFakeSSEStream_OpenAI_PlaceholderBeforeResultThenSplice(t *testing.T) {
-	w := httptest.NewRecorder()
+	w := newSyncResponseRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	h := &ChatCompletionHandlers{
@@ -68,10 +128,10 @@ func TestFakeSSEStream_OpenAI_PlaceholderBeforeResultThenSplice(t *testing.T) {
 	}()
 
 	require.Eventually(t, func() bool {
-		return w.Code == http.StatusOK && strings.Contains(w.Header().Get("Content-Type"), "text/event-stream") && strings.Contains(w.Body.String(), `"delta":{}`)
+		return w.code() == http.StatusOK && strings.Contains(w.contentType(), "text/event-stream") && strings.Contains(w.body(), `"delta":{}`)
 	}, 100*time.Millisecond, time.Millisecond, "placeholder must be committed before Process returns")
 	require.Eventually(t, func() bool {
-		return strings.Contains(w.Body.String(), ": keep-alive\n\n")
+		return strings.Contains(w.body(), ": keep-alive\n\n")
 	}, 200*time.Millisecond, time.Millisecond, "heartbeat must be emitted while waiting")
 	select {
 	case <-done:
@@ -86,7 +146,7 @@ func TestFakeSSEStream_OpenAI_PlaceholderBeforeResultThenSplice(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("writer did not splice the real result")
 	}
-	body := w.Body.String()
+	body := w.body()
 	require.Contains(t, body, `"content":"real"`)
 	require.Contains(t, body, "data: [DONE]\n\n")
 	require.Equal(t, 1, strings.Count(body, `"content":"real"`), "real content must not be duplicated")
@@ -119,7 +179,7 @@ func TestFakeStreamRouteEligible(t *testing.T) {
 }
 
 func TestFakeSSEStream_GeminiPlaceholderAndHeartbeat(t *testing.T) {
-	w := httptest.NewRecorder()
+	w := newSyncResponseRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/models/gemini:streamGenerateContent", nil)
 	h := &ChatCompletionHandlers{
@@ -136,7 +196,7 @@ func TestFakeSSEStream_GeminiPlaceholderAndHeartbeat(t *testing.T) {
 		h.writeFakeSSEStream(c, resultCh, processCtx, cancelProcess, &httpclient.Request{}, nil, nil, time.Now())
 	}()
 	require.Eventually(t, func() bool {
-		return strings.Contains(w.Body.String(), ": keep-alive\n\n")
+		return strings.Contains(w.body(), ": keep-alive\n\n")
 	}, time.Second, time.Millisecond)
 	resultCh <- fakeStreamResult{err: errors.New("stop")}
 	select {
@@ -145,7 +205,7 @@ func TestFakeSSEStream_GeminiPlaceholderAndHeartbeat(t *testing.T) {
 		t.Fatal("writer did not return after result")
 	}
 
-	body := w.Body.String()
+	body := w.body()
 	require.Contains(t, body, ": placeholder\n\n", "Gemini placeholder must be a comment frame")
 	require.NotContains(t, body, "choices", "Gemini stream must not contain OpenAI chat delta shape")
 	require.Contains(t, body, ": keep-alive\n\n", "Gemini heartbeat must be a comment frame")
@@ -192,7 +252,7 @@ func TestFakeSSEStream_AnthropicErrorFrameIsConformant(t *testing.T) {
 }
 
 func TestFakeSSEStream_ClientDisconnectCancelsProcess(t *testing.T) {
-	w := httptest.NewRecorder()
+	w := newSyncResponseRecorder()
 	c, _ := gin.CreateTestContext(w)
 	ctx, cancel := context.WithCancel(context.Background())
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
@@ -208,7 +268,7 @@ func TestFakeSSEStream_ClientDisconnectCancelsProcess(t *testing.T) {
 		defer close(done)
 		h.writeFakeSSEStream(c, resultCh, processCtx, cancelProcess, &httpclient.Request{Body: []byte(`{"stream":true}`)}, nil, nil, time.Now())
 	}()
-	require.Eventually(t, func() bool { return strings.Contains(w.Body.String(), `"delta":{}`) }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return strings.Contains(w.body(), `"delta":{}`) }, time.Second, time.Millisecond)
 	cancel()
 	select {
 	case <-done:
@@ -216,4 +276,60 @@ func TestFakeSSEStream_ClientDisconnectCancelsProcess(t *testing.T) {
 		t.Fatal("writer did not exit on client disconnect")
 	}
 	require.ErrorIs(t, processCtx.Err(), context.Canceled)
+}
+
+// recordingStream records whether Close and WaitForFinalization were invoked,
+// used to assert the raced-result drain path does not skip terminal persistence.
+type recordingStream struct {
+	closed bool
+	waited bool
+}
+
+func (s *recordingStream) Next() bool                        { return false }
+func (s *recordingStream) Current() *httpclient.StreamEvent  { return nil }
+func (s *recordingStream) Err() error                        { return nil }
+func (s *recordingStream) Close() error                      { s.closed = true; return nil }
+func (s *recordingStream) WaitForFinalization()              { s.waited = true }
+
+// TestFakeSSEStream_DeadlineEmitsInBandError red: a request deadline after the
+// placeholder was committed must surface as an in-band terminal error, not a
+// silent truncation. Modern state: writer ctx.Done branch returns without
+// writing an error frame.
+func TestFakeSSEStream_DeadlineEmitsInBandError(t *testing.T) {
+	w := newSyncResponseRecorder()
+	c, _ := gin.CreateTestContext(w)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+	h := &ChatCompletionHandlers{
+		sseKeepAlive:       SSEKeepAliveConfig{Enabled: true, Interval: 5 * time.Millisecond},
+		sseHeartbeatFormat: sseHeartbeatOpenAI,
+		streamProtocol:     StreamProtocolOpenAI,
+	}
+	gate := &fakeStreamGate{release: make(chan struct{}), idx: -1, events: []*httpclient.StreamEvent{
+		{Data: []byte(`{"choices":[{"index":0,"delta":{"content":"late"},"finish_reason":null}]}`)},
+	}}
+	resultCh := make(chan fakeStreamResult, 1)
+	processCtx, cancelProcess := context.WithCancel(ctx)
+	defer cancelProcess()
+	go func() {
+		h.writeFakeSSEStream(c, resultCh, processCtx, cancelProcess, &httpclient.Request{Body: []byte(`{"stream":true}`)}, nil, nil, time.Now())
+		close(gate.release)
+	}()
+	require.Eventually(t, func() bool { return strings.Contains(w.body(), "event:error") }, 2*time.Second, time.Millisecond, "a request deadline after the placeholder was committed must surface as an in-band terminal error")
+	require.NotContains(t, w.body(), `"late"`, "the gated upstream result must not splice after the deadline error frame")
+}
+
+// TestFakeSSEStream_DrainRacedResultFinalizes red: a result racing with ctx.Done
+// must still be Closed so terminal persistence runs. The writer's ctx.Done branch
+// delegates to drainRacedFakeStreamResult; the skeleton drains without Close, so
+// the raced stream is never finalized.
+func TestFakeSSEStream_DrainRacedResultFinalizes(t *testing.T) {
+	resultCh := make(chan fakeStreamResult, 1)
+	stream := &recordingStream{}
+	resultCh <- fakeStreamResult{result: orchestrator.ChatCompletionResult{ChatCompletionStream: stream}}
+	drainRacedFakeStreamResult(resultCh)
+	require.True(t, stream.closed, "a result racing with ctx.Done must still be Closed so terminal persistence runs")
+	require.True(t, stream.waited, "WaitForFinalization contract must not be skipped for a raced result")
+	require.Len(t, resultCh, 0, "the raced result must be consumed from the channel")
 }

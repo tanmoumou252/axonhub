@@ -626,6 +626,8 @@ var schemaGraph = func() *sqlgraph.Schema {
 			requestexecution.FieldResponseBody:               {Type: field.TypeJSON, Column: requestexecution.FieldResponseBody},
 			requestexecution.FieldResponseChunks:             {Type: field.TypeJSON, Column: requestexecution.FieldResponseChunks},
 			requestexecution.FieldErrorMessage:               {Type: field.TypeString, Column: requestexecution.FieldErrorMessage},
+			requestexecution.FieldFailureReason:              {Type: field.TypeString, Column: requestexecution.FieldFailureReason},
+			requestexecution.FieldErrorCode:                  {Type: field.TypeString, Column: requestexecution.FieldErrorCode},
 			requestexecution.FieldResponseStatusCode:         {Type: field.TypeInt, Column: requestexecution.FieldResponseStatusCode},
 			requestexecution.FieldStatus:                     {Type: field.TypeEnum, Column: requestexecution.FieldStatus},
 			requestexecution.FieldStream:                     {Type: field.TypeBool, Column: requestexecution.FieldStream},
@@ -4554,6 +4556,16 @@ func (f *RequestExecutionFilter) WhereResponseChunks(p entql.BytesP) {
 // WhereErrorMessage applies the entql string predicate on the error_message field.
 func (f *RequestExecutionFilter) WhereErrorMessage(p entql.StringP) {
 	f.Where(p.Field(requestexecution.FieldErrorMessage))
+}
+
+// WhereFailureReason applies the entql string predicate on the failure_reason field.
+func (f *RequestExecutionFilter) WhereFailureReason(p entql.StringP) {
+	f.Where(p.Field(requestexecution.FieldFailureReason))
+}
+
+// WhereErrorCode applies the entql string predicate on the error_code field.
+func (f *RequestExecutionFilter) WhereErrorCode(p entql.StringP) {
+	f.Where(p.Field(requestexecution.FieldErrorCode))
 }
 
 // WhereResponseStatusCode applies the entql int predicate on the response_status_code field.

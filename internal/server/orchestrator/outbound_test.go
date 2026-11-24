@@ -898,6 +898,51 @@ func TestPersistentOutboundTransformer_CanRetry(t *testing.T) {
 	})
 }
 
+// TestCanRetryErrorScopeChannel locks the ErrorScope wiring into CanRetry: a
+// channel-level fatal error must short-circuit to a channel switch even when the
+// candidate still has sibling models, and the model-level paths must stay
+// byte-equivalent to the pre-classifier behavior.
+func TestCanRetryErrorScopeChannel(t *testing.T) {
+	// Two sibling models so the "try the next model" branch would otherwise fire.
+	multi := func(optIn429 bool) *PersistentOutboundTransformer {
+		ch := &biz.Channel{
+			Channel:  &ent.Channel{ID: 1, Name: "scope"},
+			Outbound: &mockTransformer{},
+		}
+		if optIn429 {
+			ch.Channel.Settings = &objects.ChannelSettings{RetryableStatusCodes: []int{http.StatusTooManyRequests}}
+		}
+		return &PersistentOutboundTransformer{
+			wrapped: &mockTransformer{},
+			state: &PersistenceState{
+				CurrentCandidate: &ChannelModelsCandidate{
+					Channel: ch,
+					Models: []biz.ChannelModelEntry{
+						{RequestModel: "gpt-4", ActualModel: "gpt-4"},
+						{RequestModel: "gpt-3.5-turbo", ActualModel: "gpt-3.5-turbo"},
+					},
+				},
+				CurrentModelIndex: 0,
+			},
+		}
+	}
+
+	// Channel-level fatal: must switch channels, NOT iterate sibling models.
+	// A channel-scoped failure must not be masked by the sibling-model branch.
+	require.False(t, multi(false).CanRetry(&httpclient.Error{StatusCode: http.StatusUnauthorized}), "401 must be channel-level even with sibling models")
+	require.False(t, multi(false).CanRetry(&httpclient.Error{StatusCode: http.StatusForbidden}), "403 must be channel-level even with sibling models")
+	require.False(t, multi(false).CanRetry(errChannelUnavailableForRetry), "a channel that left service must not be retried")
+
+	// Regression locks: model-level paths stay byte-equivalent to pre-classifier.
+	require.False(t, multi(false).CanRetry(&httpclient.Error{StatusCode: http.StatusTooManyRequests}), "429 not opted in still switches channels")
+	require.True(t, multi(true).CanRetry(&httpclient.Error{StatusCode: http.StatusTooManyRequests}), "429 opted in retries same channel")
+	require.False(t, multi(false).CanRetry(&httpclient.Error{StatusCode: http.StatusPaymentRequired}), "402 must be channel-level")
+	require.False(t, multi(false).CanRetry(&httpclient.Error{StatusCode: 520}), "520 must be channel-level")
+	require.True(t, multi(false).CanRetry(pipeline.ErrEmptyResponse), "empty response is model-level and retries before the scope check")
+	require.True(t, multi(false).CanRetry(pipeline.ErrEmptyStreamChunks), "empty stream chunks is model-level")
+	require.True(t, multi(false).CanRetry(pipeline.ErrEmptyAggregatedBody), "empty aggregated body is model-level")
+}
+
 func TestShouldForceStreamingForCandidate(t *testing.T) {
 	newCandidate := func(policy objects.CapabilityPolicy, apiFormat llm.APIFormat) *ChannelModelsCandidate {
 		return &ChannelModelsCandidate{

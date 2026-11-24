@@ -41,6 +41,12 @@ type PersistenceState struct {
 	// candidate-specific forcing to provider-side streaming happens.
 	OriginalRequestStream *bool
 
+	// FakeStreamHandlerEnabled is the per-request master-switch marker: true when
+	// the handler registered a fake-stream decision callback (global switch on
+	// + eligible route). Consumed by FakeStreamMode() and the Mode B force block
+	// in outbound.go. Zero value false = switch off, no Mode B leakage.
+	FakeStreamHandlerEnabled bool
+
 	// PromptProtectionMaskRules records the mask rules that changed this request.
 	// Request-body pass-through uses it to patch the original JSON without dropping
 	// provider-specific fields that are not represented by the unified request.

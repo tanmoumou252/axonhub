@@ -711,6 +711,30 @@ const (
 	FakeStreamModeFake        FakeStreamMode = "fake_stream"
 )
 
+// MarshalGQL writes a GraphQL enum value. The zero value is unset and must be
+// null; an empty string is not a valid FakeStreamMode (illegal enum literal).
+func (e FakeStreamMode) MarshalGQL(w io.Writer) {
+	if e == "" {
+		_, _ = io.WriteString(w, "null")
+		return
+	}
+	_, _ = io.WriteString(w, strconv.Quote(string(e)))
+}
+
+// UnmarshalGQL reads a GraphQL enum or null. Null stays the unset zero value.
+func (e *FakeStreamMode) UnmarshalGQL(v any) error {
+	if v == nil {
+		*e = ""
+		return nil
+	}
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("FakeStreamMode must be a string")
+	}
+	*e = FakeStreamMode(str)
+	return nil
+}
+
 // FakeStreamDecisionScope selects which candidate's channel policy decides
 // whether the downstream placeholder is committed before upstream TTFT.
 type FakeStreamDecisionScope string

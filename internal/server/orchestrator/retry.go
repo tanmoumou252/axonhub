@@ -52,11 +52,20 @@ func isRetryableErrorForChannel(err error, ch *biz.Channel) bool {
 // that lists 429 is saying the code means "the upstream endpoint is busy"
 // instead, where a same-channel retry can win the race.
 func channelRetriesOn429(ch *biz.Channel) bool {
+	return channelOptsRetryForCode(ch, http.StatusTooManyRequests)
+}
+
+// channelOptsRetryForCode reports whether the channel explicitly opted a given
+// HTTP status code into same-channel retries via ChannelSettings.RetryableStatusCodes.
+// This is the general form of channelRetriesOn429: an operator listing 403 (or any
+// code) is saying that code is transient for this channel, so the ErrorScope
+// classifier must not upgrade it to a channel-wide failure.
+func channelOptsRetryForCode(ch *biz.Channel, code int) bool {
 	if ch == nil || ch.Channel == nil || ch.Settings == nil {
 		return false
 	}
 
-	return slices.Contains(ch.Settings.RetryableStatusCodes, http.StatusTooManyRequests)
+	return slices.Contains(ch.Settings.RetryableStatusCodes, code)
 }
 
 func matchesRetryableErrorPattern(err error, patterns []objects.RetryableErrorPattern) bool {

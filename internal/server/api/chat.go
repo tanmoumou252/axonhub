@@ -189,6 +189,7 @@ func (handlers *ChatCompletionHandlers) ChatCompletionWithRequest(c *gin.Context
 				handlers.finishFakeStreamResult(c, genericReq, res, ctx, evaluator, abortUpstream, started)
 				return
 			case <-ctx.Done():
+				handlers.finishDanglingFakeStreamResult(c, genericReq, resultCh, ctx, evaluator, abortUpstream, started)
 				cancelProcess()
 				return
 			}
@@ -243,6 +244,39 @@ func (handlers *ChatCompletionHandlers) finishFakeStreamResult(
 		return
 	}
 	handlers.writeChatCompletionResult(c, genericReq, res.result, evaluator, abortUpstream, started)
+}
+
+// finishDanglingFakeStreamResult handles the handler select's ctx.Done branch.
+// The background Process goroutine may have already enqueued a result that races
+// with cancellation; that result must still be finalized so terminal persistence
+// runs. A pre-commit deadline (no bytes written yet) is surfaced as an HTTP error
+// like the synchronous path; a plain client disconnect with no raced result
+// writes nothing.
+func (handlers *ChatCompletionHandlers) finishDanglingFakeStreamResult(
+	c *gin.Context,
+	genericReq *httpclient.Request,
+	resultCh <-chan fakeStreamResult,
+	ctx context.Context,
+	evaluator *safeguards.Evaluator,
+	abortUpstream context.CancelFunc,
+	started time.Time,
+) {
+	select {
+	case res := <-resultCh:
+		// A result raced with ctx.Done — finish it exactly as the off/result
+		// branches do, so Close→finalizeClose→WaitForFinalization and usage
+		// accounting are not skipped.
+		handlers.finishFakeStreamResult(c, genericReq, res, ctx, evaluator, abortUpstream, started)
+		return
+	default:
+	}
+
+	// No result was enqueued. A deadline before any byte is committed must answer
+	// an HTTP error, not an empty 200 (mirrors the synchronous path chat.go:199).
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		handlers.finishFakeStreamResult(c, genericReq, fakeStreamResult{err: ctx.Err()}, ctx, evaluator, abortUpstream, started)
+	}
+	// A plain client cancellation with no raced result writes nothing.
 }
 
 // writeChatCompletionResult contains the existing success writeback for both the

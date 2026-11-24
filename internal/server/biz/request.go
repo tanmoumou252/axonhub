@@ -1341,6 +1341,14 @@ func (s *RequestService) UpdateRequestExecutionCanceled(
 // ExecutionErrorInfo holds error details for a failed request execution.
 type ExecutionErrorInfo struct {
 	StatusCode *int
+	// FailureReason is the stable coarse failure reason (see orchestrator
+	// FailureReason constants). Written to the failure_reason column when
+	// non-empty; empty leaves the column untouched.
+	FailureReason string
+	// ErrorCode mirrors the classified error code (e.g.
+	// upstream_stream_interrupted). Written to the error_code column when
+	// non-empty; empty leaves the column untouched.
+	ErrorCode string
 }
 
 // UpdateRequestExecutionFailed updates request execution status to failed with error message and optional error details.
@@ -1392,6 +1400,14 @@ func (s *RequestService) UpdateRequestExecutionStatusWithMetrics(
 
 	if errorInfo != nil && errorInfo.StatusCode != nil {
 		upd = upd.SetResponseStatusCode(*errorInfo.StatusCode)
+	}
+
+	if errorInfo != nil && errorInfo.FailureReason != "" {
+		upd = upd.SetFailureReason(errorInfo.FailureReason)
+	}
+
+	if errorInfo != nil && errorInfo.ErrorCode != "" {
+		upd = upd.SetErrorCode(errorInfo.ErrorCode)
 	}
 
 	if headers, err := s.responseHeadersForStorage(ctx, responseHeaders); err != nil {

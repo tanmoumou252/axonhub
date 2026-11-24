@@ -75,7 +75,7 @@ func TestWriteSSEStream_AnthropicErrorFrameIsConformant(t *testing.T) {
 	found := false
 	for _, line := range splitSSEDataLines(body) {
 		if json.Unmarshal([]byte(line), &frame) == nil {
-			if _, ok := frame["type"]; ok {
+			if v, ok := frame["type"]; ok && v == "error" {
 				found = true
 				break
 			}

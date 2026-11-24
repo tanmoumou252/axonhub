@@ -302,14 +302,19 @@ func ExtractErrorInfo(err error) *biz.ExecutionErrorInfo {
 		if respErr, ok := xerrors.As[*llm.ResponseError](err); ok && respErr.StatusCode != 0 {
 			statusCode := respErr.StatusCode
 
-			return &biz.ExecutionErrorInfo{StatusCode: &statusCode}
+			return &biz.ExecutionErrorInfo{
+				StatusCode:    &statusCode,
+				FailureReason: FailureReason(err),
+				ErrorCode:     respErr.Detail.Code,
+			}
 		}
 
 		return nil
 	}
 
 	return &biz.ExecutionErrorInfo{
-		StatusCode: &httpErr.StatusCode,
+		StatusCode:    &httpErr.StatusCode,
+		FailureReason: FailureReason(err),
 	}
 }
 

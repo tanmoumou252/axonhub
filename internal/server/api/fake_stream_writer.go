@@ -8,6 +8,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/looplj/axonhub/internal/server/orchestrator"
 	"github.com/looplj/axonhub/internal/server/safeguards"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/streams"
 )
 
 // fakeStreamResult carries the outcome of the single background Process() call.
@@ -69,6 +71,18 @@ func (handlers *ChatCompletionHandlers) writeFakeSSEStream(
 	for {
 		select {
 		case <-ctx.Done():
+			// A result may have raced with cancellation (G1 enqueued then both
+			// branches became ready). Drain it and finalize the stream so terminal
+			// persistence runs, but never splice — the response is already
+			// committed as 200+SSE, so we only Close/WaitForFinalization.
+			drainRacedFakeStreamResult(resultCh)
+			// A request deadline after the placeholder was committed would
+			// otherwise truncate the response silently (no [DONE], no error frame).
+			// Surface it as an in-band terminal error, mirroring writeSSEStreamEnd.
+			// A plain client cancellation keeps the current silent return.
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				_ = writeSSEErrorEvent(ctx, c.Writer, encodeErr, ctx.Err())
+			}
 			cancelProcess() // E7/E9: abort background Process on client disconnect.
 			return
 		case res := <-resultCh:
@@ -87,6 +101,26 @@ func (handlers *ChatCompletionHandlers) writeFakeSSEStream(
 				return
 			}
 		}
+	}
+}
+
+// drainRacedFakeStreamResult consumes a result that the background Process
+// goroutine enqueued while ctx.Done was racing with it. The 200+SSE response is
+// already committed, so we never splice; we only Close the stream and wait for
+// finalization so terminal persistence (aggregate + usage accounting) runs.
+// Idempotent with writeChatCompletionResult's defer via the stream's own
+// closeOnce/closeMu guards.
+func drainRacedFakeStreamResult(resultCh <-chan fakeStreamResult) {
+	select {
+	case res := <-resultCh:
+		if res.result.ChatCompletionStream == nil {
+			return
+		}
+		_ = res.result.ChatCompletionStream.Close()
+		if waiter, ok := res.result.ChatCompletionStream.(streams.FinalizationWaiter); ok {
+			waiter.WaitForFinalization()
+		}
+	default:
 	}
 }
 

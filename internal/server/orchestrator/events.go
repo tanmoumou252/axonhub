@@ -78,10 +78,11 @@ func publishRequestAttemptFailed(ctx context.Context, state *PersistenceState, e
 		statusCode, errorType, errorMessage := eventErrorFields(err)
 
 		return requestSubjectRefs(state, eventModel(state), bizChannelRef(ch), credentialEventRef(oauth, key)), map[string]any{
-			"attempt":      outboundAttempts(state),
-			"statusCode":   statusCode,
-			"errorType":    errorType,
-			"errorMessage": errorMessage,
+			"attempt":       outboundAttempts(state),
+			"statusCode":    statusCode,
+			"errorType":     errorType,
+			"errorMessage":  errorMessage,
+			"failureReason": FailureReason(err),
 		}
 	})
 }
@@ -95,10 +96,11 @@ func publishRequestFailed(ctx context.Context, state *PersistenceState, err erro
 			statusCode, errorType, errorMessage := eventErrorFields(err)
 
 			return requestSubjectRefs(state, eventModel(state), bizChannelRef(currentBizChannel(state)), nil), map[string]any{
-				"statusCode":   statusCode,
-				"errorType":    errorType,
-				"errorMessage": errorMessage,
-				"attempts":     outboundAttempts(state),
+				"statusCode":    statusCode,
+				"errorType":     errorType,
+				"errorMessage":  errorMessage,
+				"attempts":      outboundAttempts(state),
+				"failureReason": FailureReason(err),
 			}
 		})
 	})

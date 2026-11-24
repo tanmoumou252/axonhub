@@ -136327,16 +136327,13 @@ func (ec *executionContext) unmarshalOExcludeAssociationInput2ᚕᚖgithubᚗcom
 }
 
 func (ec *executionContext) unmarshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode(ctx context.Context, v any) (objects.FakeStreamMode, error) {
-	tmp, err := graphql.UnmarshalString(v)
-	res := objects.FakeStreamMode(tmp)
+	var res objects.FakeStreamMode
+	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOFakeStreamMode2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐFakeStreamMode(ctx context.Context, sel ast.SelectionSet, v objects.FakeStreamMode) graphql.Marshaler {
-	_ = sel
-	_ = ctx
-	res := graphql.MarshalString(string(v))
-	return res
+	return v
 }
 
 func (ec *executionContext) marshalOFilterCondition2ᚕgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐConditionᚄ(ctx context.Context, sel ast.SelectionSet, v []objects.Condition) graphql.Marshaler {
